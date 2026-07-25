@@ -3,239 +3,415 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🧪 Test Sensores</title>
+    <title>🧪 Test Sensores - Android Fix</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: Arial, sans-serif;
             background: #1a1a2e;
             color: white;
             padding: 20px;
-            text-align: center;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
         }
         .container {
-            max-width: 400px;
+            max-width: 450px;
             width: 100%;
             background: rgba(255,255,255,0.05);
             border-radius: 20px;
-            padding: 30px;
+            padding: 25px;
             border: 1px solid rgba(255,255,255,0.1);
         }
-        h1 { color: #f0c040; margin-bottom: 20px; }
-        .value {
-            font-size: 2rem;
-            color: #88ccff;
+        h1 { color: #f0c040; text-align: center; margin-bottom: 20px; font-size: 1.5rem; }
+        .status-box {
+            padding: 12px;
+            border-radius: 10px;
             margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.9rem;
         }
-        .label { color: #aaa; font-size: 0.9rem; }
+        .status-success { background: rgba(76, 175, 80, 0.3); color: #4caf50; }
+        .status-error { background: rgba(255, 68, 68, 0.3); color: #ff4444; }
+        .status-warning { background: rgba(255, 170, 0, 0.3); color: #ffaa00; }
+        .status-info { background: rgba(136, 204, 255, 0.2); color: #88ccff; }
+        
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .sensor-card {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .sensor-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .sensor-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #f0c040;
+            margin-top: 5px;
+            min-height: 40px;
+        }
+        .sensor-value.active { color: #4caf50; }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
         button {
+            flex: 1;
             background: #f0c040;
             color: #1a1a2e;
             border: none;
-            padding: 15px 30px;
+            padding: 12px;
             border-radius: 30px;
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: bold;
-            margin: 10px;
             cursor: pointer;
         }
-        #status { 
-            padding: 10px;
-            border-radius: 10px;
-            margin: 10px 0;
-            background: rgba(255,255,255,0.05);
+        button:active { transform: scale(0.95); }
+        button.secondary { background: #444; color: white; }
+        
+        .help-text {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(255,200,0,0.08);
+            border: 1px solid rgba(255,200,0,0.2);
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: #aaa;
+            line-height: 1.6;
         }
-        .success { color: #4caf50; }
-        .error { color: #ff4444; }
-        .warning { color: #ffaa00; }
-        .info { color: #88ccff; }
+        .help-text strong { color: #f0c040; }
+        .log-area {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            font-size: 0.7rem;
+            color: #666;
+            max-height: 100px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🧪 Test de Sensores</h1>
         
-        <div id="status" class="info">🔄 Iniciando...</div>
+        <div id="status" class="status-box status-info">🔄 Iniciando...</div>
         
-        <div>
-            <div class="label">🧭 Alpha (Rumbo)</div>
-            <div class="value" id="alpha">---°</div>
+        <div class="sensor-grid">
+            <div class="sensor-card">
+                <div class="sensor-label">🧭 Alpha (Rumbo)</div>
+                <div id="alpha" class="sensor-value">---</div>
+            </div>
+            <div class="sensor-card">
+                <div class="sensor-label">📐 Beta</div>
+                <div id="beta" class="sensor-value">---</div>
+            </div>
+            <div class="sensor-card">
+                <div class="sensor-label">📐 Gamma</div>
+                <div id="gamma" class="sensor-value">---</div>
+            </div>
+            <div class="sensor-card">
+                <div class="sensor-label">🍎 Compass (iOS)</div>
+                <div id="compass" class="sensor-value">---</div>
+            </div>
         </div>
         
-        <div>
-            <div class="label">📐 Beta (Inclinación)</div>
-            <div class="value" id="beta">---°</div>
+        <div id="raw-data" style="text-align:center;font-size:0.8rem;color:#666;margin:5px 0;">
+            Esperando datos...
         </div>
         
-        <div>
-            <div class="label">📐 Gamma (Rotación)</div>
-            <div class="value" id="gamma">---°</div>
+        <div class="btn-group">
+            <button onclick="forceActivate()">📱 Activar Sensores</button>
+            <button onclick="window.location.reload()" class="secondary">🔄 Recargar</button>
         </div>
         
-        <div>
-            <div class="label">🍎 Compass (iOS)</div>
-            <div class="value" id="compass">---°</div>
+        <div class="help-text">
+            <strong>📱 Instrucciones para Android:</strong><br>
+            1. Toca <strong>"Activar Sensores"</strong><br>
+            2. Mueve el teléfono en <strong>forma de 8</strong><br>
+            3. Si no funciona, abre <strong>Chrome</strong> (no otra app)<br>
+            4. Ve a <strong>Ajustes > Apps > Chrome > Permisos</strong> y activa <strong>"Sensores"</strong>
         </div>
         
-        <div style="margin-top: 20px;">
-            <button onclick="requestPermission()">📱 Solicitar Permiso</button>
-            <button onclick="window.location.reload()">🔄 Recargar</button>
-        </div>
-        
-        <div style="margin-top: 15px; font-size: 0.8rem; color: #666;">
-            Toca la pantalla para activar los sensores
-        </div>
+        <div id="log" class="log-area"></div>
     </div>
 
     <script>
+        // Variables
         let sensorActive = false;
         let retryCount = 0;
+        let eventCount = 0;
+        const logElement = document.getElementById('log');
+        const statusElement = document.getElementById('status');
+        const rawDataElement = document.getElementById('raw-data');
         
-        function updateStatus(message, type = 'info') {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = type;
+        // Elementos de valores
+        const alphaEl = document.getElementById('alpha');
+        const betaEl = document.getElementById('beta');
+        const gammaEl = document.getElementById('gamma');
+        const compassEl = document.getElementById('compass');
+
+        // ============================================
+        // FUNCIONES DE LOG
+        // ============================================
+        function addLog(message) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logElement.appendChild(entry);
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(message);
         }
-        
-        function requestPermission() {
-            updateStatus('🔄 Solicitando permiso...', 'info');
+
+        function setStatus(message, type = 'info') {
+            statusElement.textContent = message;
+            statusElement.className = `status-box status-${type}`;
+        }
+
+        // ============================================
+        // MANEJADOR DE ORIENTACIÓN - VERSIÓN ANDROID
+        // ============================================
+        function handleOrientation(event) {
+            eventCount++;
             
-            if (typeof DeviceOrientationEvent !== 'undefined' && 
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // Obtener valores con manejo de null/undefined
+            let alpha = event.alpha;
+            let beta = event.beta;
+            let gamma = event.gamma;
+            let compass = event.webkitCompassHeading;
+            
+            // Mostrar datos crudos
+            rawDataElement.textContent = `📊 Evento #${eventCount} | Alpha: ${alpha} | Beta: ${beta} | Gamma: ${gamma}`;
+            
+            // CONVERTIR A NÚMEROS Y MANEJAR NaN
+            const alphaNum = parseFloat(alpha);
+            const betaNum = parseFloat(beta);
+            const gammaNum = parseFloat(gamma);
+            const compassNum = parseFloat(compass);
+            
+            // Verificar si son números válidos
+            const isValidAlpha = !isNaN(alphaNum) && alpha !== null && alpha !== undefined;
+            const isValidBeta = !isNaN(betaNum) && beta !== null && beta !== undefined;
+            const isValidGamma = !isNaN(gammaNum) && gamma !== null && gamma !== undefined;
+            const isValidCompass = !isNaN(compassNum) && compass !== undefined;
+            
+            // Actualizar UI
+            if (isValidAlpha) {
+                alphaEl.textContent = Math.round(alphaNum) + '°';
+                alphaEl.className = 'sensor-value active';
+            } else {
+                alphaEl.textContent = '---';
+                alphaEl.className = 'sensor-value';
+            }
+            
+            if (isValidBeta) {
+                betaEl.textContent = Math.round(betaNum) + '°';
+                betaEl.className = 'sensor-value active';
+            } else {
+                betaEl.textContent = '---';
+                betaEl.className = 'sensor-value';
+            }
+            
+            if (isValidGamma) {
+                gammaEl.textContent = Math.round(gammaNum) + '°';
+                gammaEl.className = 'sensor-value active';
+            } else {
+                gammaEl.textContent = '---';
+                gammaEl.className = 'sensor-value';
+            }
+            
+            if (isValidCompass) {
+                compassEl.textContent = Math.round(compassNum) + '°';
+                compassEl.className = 'sensor-value active';
+            } else {
+                compassEl.textContent = '---';
+                compassEl.className = 'sensor-value';
+            }
+            
+            // Si AL MENOS UNO es válido, los sensores funcionan
+            if (isValidAlpha || isValidBeta || isValidGamma || isValidCompass) {
+                sensorActive = true;
+                setStatus('✅ ¡Sensores funcionando!', 'success');
+                addLog('✅ Datos válidos recibidos');
                 
-                DeviceOrientationEvent.requestPermission()
-                    .then(state => {
-                        console.log('Permiso:', state);
-                        if (state === 'granted') {
-                            updateStatus('✅ Permiso concedido', 'success');
-                            startListening();
-                        } else {
-                            updateStatus('❌ Permiso denegado: ' + state, 'error');
+                // Si alpha es 0 pero el resto tiene datos, funciona
+                if (isValidAlpha && Math.round(alphaNum) === 0 && (isValidBeta || isValidGamma)) {
+                    setStatus('⚠️ Sensor activo - Mueve en 8 para calibrar', 'warning');
+                    addLog('⚠️ Alpha en 0 - necesita calibración');
+                }
+            } else {
+                // Si no hay datos válidos pero recibimos evento
+                if (eventCount > 1) {
+                    setStatus('⚠️ Recibiendo eventos sin datos válidos', 'warning');
+                    addLog('⚠️ Evento sin datos válidos');
+                }
+            }
+        }
+
+        // ============================================
+        // FUNCIÓN PARA FORZAR ACTIVACIÓN
+        // ============================================
+        function forceActivate() {
+            addLog('📱 Activando sensores...');
+            setStatus('🔄 Activando sensores...', 'info');
+            
+            // 1. Remover y volver a añadir el listener
+            window.removeEventListener('deviceorientation', handleOrientation);
+            window.addEventListener('deviceorientation', handleOrientation, true);
+            
+            // 2. Intentar con devicemotion también (a veces funciona mejor)
+            window.addEventListener('devicemotion', function motionHandler(e) {
+                const acc = e.acceleration;
+                if (acc && (acc.x !== null || acc.y !== null || acc.z !== null)) {
+                    addLog('📱 Movimiento detectado: ' + JSON.stringify(acc));
+                    setStatus('📱 Movimiento detectado', 'info');
+                }
+            }, true);
+            
+            // 3. En Android, a veces es necesario un permiso extra
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'sensors' })
+                    .then(result => {
+                        addLog('🔐 Permiso sensores: ' + result.state);
+                        if (result.state === 'prompt') {
+                            // Esto puede activar el diálogo de permisos
+                            navigator.permissions.request({ name: 'sensors' }).catch(() => {});
                         }
                     })
-                    .catch(err => {
-                        console.error('Error:', err);
-                        updateStatus('❌ Error: ' + err.message, 'error');
-                    });
-            } else {
-                updateStatus('✅ No necesita permiso en este navegador', 'success');
-                startListening();
+                    .catch(err => addLog('❌ Error verificando permisos: ' + err.message));
             }
-        }
-        
-        function startListening() {
-            window.addEventListener('deviceorientation', handleOrientation, true);
-            window.addEventListener('devicemotion', handleMotion, true);
             
-            updateStatus('👂 Escuchando sensores...', 'info');
+            // 4. Crear un evento dummy para "despertar" los sensores
+            try {
+                const dummyEvent = new Event('deviceorientation');
+                window.dispatchEvent(dummyEvent);
+                addLog('📤 Evento dummy enviado');
+            } catch (e) {
+                addLog('⚠️ No se pudo crear evento dummy');
+            }
             
-            // Activar con toque en Android
-            document.addEventListener('click', function firstClick() {
-                console.log('👆 Click detectado');
-                document.removeEventListener('click', firstClick);
-                // Forzar una lectura
-                window.dispatchEvent(new Event('deviceorientation'));
-            }, { once: true });
-            
-            // Si después de 3 segundos no hay datos, mostrar ayuda
+            // 5. Si no hay datos después de 5 segundos, sugerir calibración
             setTimeout(() => {
                 if (!sensorActive) {
-                    updateStatus('⚠️ Mueve el teléfono en forma de 8', 'warning');
+                    setStatus('🔄 Mueve el teléfono en forma de 8', 'warning');
+                    addLog('⚠️ Mueve el teléfono en forma de 8');
                 }
             }, 3000);
-            
-            // Reintentar cada 5 segundos si no hay datos
-            const interval = setInterval(() => {
-                if (!sensorActive && retryCount < 6) {
-                    retryCount++;
-                    console.log(`Reintento ${retryCount}...`);
-                    updateStatus(`🔄 Reintentando (${retryCount}/6)...`, 'info');
+        }
+
+        // ============================================
+        // SOLICITAR PERMISO
+        // ============================================
+        async function requestPermission() {
+            try {
+                // Android: verificar si existe el sensor
+                if (window.DeviceOrientationEvent) {
+                    setStatus('🔄 Conectando al sensor...', 'info');
+                    addLog('🔍 DeviceOrientationEvent soportado');
                     
-                    // Reiniciar listener
-                    window.removeEventListener('deviceorientation', handleOrientation);
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                } else if (sensorActive) {
-                    clearInterval(interval);
-                } else if (retryCount >= 6) {
-                    clearInterval(interval);
-                    updateStatus('❌ No se detectaron sensores. Verifica permisos.', 'error');
+                    // iOS
+                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        setStatus('🔐 Solicitando permiso...', 'info');
+                        const state = await DeviceOrientationEvent.requestPermission();
+                        addLog('🔐 Permiso iOS: ' + state);
+                        if (state === 'granted') {
+                            setStatus('✅ Permiso concedido', 'success');
+                            window.addEventListener('deviceorientation', handleOrientation, true);
+                        } else {
+                            setStatus('❌ Permiso denegado', 'error');
+                            return;
+                        }
+                    } else {
+                        // Android - añadir listener directamente
+                        addLog('📱 Android - añadiendo listener');
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                        setStatus('👂 Escuchando sensores...', 'info');
+                    }
+                    
+                    // Intentar activar automáticamente
+                    setTimeout(forceActivate, 500);
+                    
+                } else {
+                    setStatus('❌ Tu navegador no soporta DeviceOrientation', 'error');
+                    addLog('❌ DeviceOrientationEvent no disponible');
                 }
-            }, 3000);
+            } catch (error) {
+                setStatus('❌ Error: ' + error.message, 'error');
+                addLog('❌ Error: ' + error.message);
+            }
         }
-        
-        function handleOrientation(e) {
-            const alpha = e.alpha !== null ? Math.round(e.alpha) : '---';
-            const beta = e.beta !== null ? Math.round(e.beta) : '---';
-            const gamma = e.gamma !== null ? Math.round(e.gamma) : '---';
-            const compass = e.webkitCompassHeading !== undefined ? 
-                Math.round(e.webkitCompassHeading) : '---';
+
+        // ============================================
+        // INICIAR
+        // ============================================
+        async function init() {
+            addLog('🚀 Iniciando test de sensores...');
             
-            document.getElementById('alpha').textContent = alpha + '°';
-            document.getElementById('beta').textContent = beta + '°';
-            document.getElementById('gamma').textContent = gamma + '°';
-            document.getElementById('compass').textContent = compass + '°';
+            // Verificar si es Android
+            const isAndroid = /android/i.test(navigator.userAgent);
+            const isChrome = /chrome/i.test(navigator.userAgent);
+            addLog(`📱 Dispositivo: ${isAndroid ? 'Android' : 'Otro'} | Chrome: ${isChrome}`);
             
-            // Verificar si hay datos reales
-            if ((alpha !== '---' && alpha !== 0) || compass !== '---') {
-                sensorActive = true;
-                updateStatus('✅ ¡Sensores funcionando!', 'success');
-                
-                // Si alpha es 0 pero compass tiene datos, es iOS
-                if (compass !== '---') {
-                    updateStatus('✅ ¡Sensores funcionando! (iOS)', 'success');
-                }
-            } else if (alpha === 0) {
-                // Alpha 0 significa que el sensor está activo pero no calibrado
-                updateStatus('⚠️ Sensor activo - Mueve en 8 para calibrar', 'warning');
-                sensorActive = true; // Considerarlo activo
+            if (isAndroid && !isChrome) {
+                addLog('⚠️ Recomendamos usar Chrome en Android');
+                setStatus('⚠️ Usa Chrome para mejor compatibilidad', 'warning');
             }
             
-            console.log('Orientación:', { alpha, beta, gamma, compass });
-        }
-        
-        function handleMotion(e) {
-            const acc = e.acceleration;
-            if (acc && (acc.x !== null || acc.y !== null || acc.z !== null)) {
-                console.log('📱 Movimiento detectado:', acc);
+            await requestPermission();
+            
+            // Si después de 10 segundos no hay datos
+            setTimeout(() => {
                 if (!sensorActive) {
-                    updateStatus('📱 Movimiento detectado - activando orientación...', 'info');
+                    setStatus('⚠️ No se detectan sensores. Toca "Activar Sensores"', 'warning');
+                    addLog('⚠️ No se detectaron sensores automáticamente');
                 }
-            }
+            }, 8000);
         }
-        
-        // Auto-iniciar
-        requestPermission();
-        
-        // Mostrar ayuda si no funciona después de 10 segundos
-        setTimeout(() => {
+
+        // ============================================
+        // EVENTOS
+        // ============================================
+        // Tocar la pantalla activa en Android
+        document.addEventListener('click', () => {
+            addLog('👆 Click detectado');
             if (!sensorActive) {
-                const helpDiv = document.createElement('div');
-                helpDiv.style.cssText = `
-                    margin-top: 20px;
-                    padding: 15px;
-                    background: rgba(255,200,0,0.1);
-                    border: 1px solid #f0c040;
-                    border-radius: 10px;
-                    text-align: left;
-                    font-size: 0.8rem;
-                `;
-                helpDiv.innerHTML = `
-                    <p style="color:#f0c040;"><strong>📱 Soluciones:</strong></p>
-                    <ul style="color:#aaa; padding-left:20px;">
-                        <li>✅ Asegúrate de usar <strong>HTTPS</strong></li>
-                        <li>🔄 Mueve el teléfono en <strong>forma de 8</strong></li>
-                        <li>📱 Usa <strong>Chrome</strong> en Android</li>
-                        <li>🍎 En iOS: Ajustes > Safari > Acceso a movimiento</li>
-                        <li>🔐 Acepta todos los permisos</li>
-                    </ul>
-                `;
-                document.querySelector('.container').appendChild(helpDiv);
+                forceActivate();
             }
-        }, 10000);
+        }, { once: false });
+        
+        document.addEventListener('touchstart', () => {
+            addLog('👆 Touch detectado');
+            if (!sensorActive) {
+                forceActivate();
+            }
+        }, { passive: true });
+
+        // ============================================
+        // INICIAR
+        // ============================================
+        init();
+        
+        // Log de ayuda
+        addLog('💡 Si no funciona: toca "Activar Sensores" o la pantalla');
+        addLog('💡 En Android: Ajustes > Apps > Chrome > Permisos > Sensores');
     </script>
 </body>
 </html>
