@@ -1,10 +1,16 @@
+// ============================================
+// BRÚJULA WEB - VERSIÓN FINAL
+// Usa AbsoluteOrientationSensor + fallbacks
+// ============================================
+
 // Variables globales
 let currentHeading = 0;
 let isCalibrating = false;
 let calibrationOffset = 0;
 let sensorActive = false;
 let sensorType = 'ninguno';
-let magnetometer = null;
+let sensor = null;
+let useFallback = false;
 
 // Elementos del DOM
 const needle = document.getElementById('needle');
@@ -14,84 +20,109 @@ const sensorInfoDisplay = document.getElementById('sensor-info');
 const calibrateBtn = document.getElementById('calibrate-btn');
 
 // ============================================
-// CALCULAR RUMBO DESDE MAGNETÓMETRO
+// QUATERNION A GRADOS (heading)
 // ============================================
-function calculateHeadingFromMagnetometer(x, y) {
-    if (x === null || y === null || isNaN(x) || isNaN(y)) {
-        return null;
-    }
+function quaternionToHeading(q) {
+    // Convertir quaternion a ángulo de heading (yaw)
+    // q = [x, y, z, w] (w es el escalar)
+    const x = q[0];
+    const y = q[1];
+    const z = q[2];
+    const w = q[3];
     
-    // Fórmula estándar para el rumbo desde el magnetómetro
-    let heading = Math.atan2(y, x) * (180 / Math.PI);
+    // Calcular yaw (heading) desde el quaternion
+    // Fórmula: yaw = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
+    const siny = 2 * (w * z + x * y);
+    const cosy = 1 - 2 * (y * y + z * z);
+    let heading = Math.atan2(siny, cosy) * (180 / Math.PI);
     
-    // Normalizar a 0-360 grados
+    // Normalizar a 0-360
     heading = (heading + 360) % 360;
-    
-    // Ajustar para que 0 = Norte (el sensor magnético da 0 = Este)
-    heading = (heading + 90) % 360;
-    
     return heading;
 }
 
 // ============================================
-// INICIAR MAGNETOMETER (Android)
+// ROTATION MATRIX A GRADOS
 // ============================================
-function startMagnetometer() {
+function matrixToHeading(matrix) {
+    // Extraer heading de una matriz de rotación 4x4
+    // Usando la convención: heading = atan2(m[1][0], m[0][0])
+    // m[0][0] = matrix[0], m[1][0] = matrix[4], m[0][1] = matrix[1]
+    let heading = Math.atan2(matrix[4], matrix[0]) * (180 / Math.PI);
+    heading = (heading + 360) % 360;
+    return heading;
+}
+
+// ============================================
+// INICIAR ABSOLUTE ORIENTATION SENSOR
+// ============================================
+function startAbsoluteOrientation() {
     try {
         // Verificar si la API está disponible
-        if (!window.Magnetometer) {
-            console.warn('Magnetometer API no disponible');
+        if (!window.AbsoluteOrientationSensor) {
+            console.warn('AbsoluteOrientationSensor no disponible');
+            sensorInfoDisplay.textContent = '⚠️ AbsoluteOrientationSensor no disponible';
             return false;
         }
         
-        sensorInfoDisplay.textContent = '🔍 Intentando Magnetometer API...';
-        statusDisplay.textContent = '🔄 Iniciando Magnetometer...';
+        sensorInfoDisplay.textContent = '🔍 Iniciando AbsoluteOrientationSensor...';
+        statusDisplay.textContent = '🔄 Conectando...';
         
         // Crear el sensor con frecuencia alta
-        magnetometer = new Magnetometer({ frequency: 60 });
+        sensor = new AbsoluteOrientationSensor({
+            frequency: 60,
+            referenceFrame: 'device'
+        });
         
-        // Evento cuando hay lectura
-        magnetometer.addEventListener('reading', () => {
-            const x = magnetometer.x;
-            const y = magnetometer.y;
-            const z = magnetometer.z;
+        // Evento de lectura
+        sensor.addEventListener('reading', () => {
+            let heading = null;
             
-            console.log('🧲 Magnetometer:', { x, y, z });
+            // Intentar obtener el quaternion
+            if (sensor.quaternion) {
+                const q = sensor.quaternion;
+                heading = quaternionToHeading(q);
+                sensorType = 'absolute-quaternion';
+                console.log('🧭 Quaternion heading:', heading);
+            }
+            // Fallback: usar matriz de rotación
+            else if (sensor.rotationMatrix) {
+                heading = matrixToHeading(sensor.rotationMatrix);
+                sensorType = 'absolute-matrix';
+                console.log('🧭 Matrix heading:', heading);
+            }
             
-            // Calcular rumbo
-            const heading = calculateHeadingFromMagnetometer(x, y);
-            
-            if (heading !== null) {
+            if (heading !== null && !isNaN(heading)) {
                 sensorActive = true;
-                sensorType = 'magnetometer';
                 currentHeading = heading;
-                
-                // Actualizar UI
                 updateCompass(heading);
-                statusDisplay.textContent = '✅ Brújula (Magnetometer)';
-                sensorInfoDisplay.textContent = '🧲 Usando Magnetometer API';
+                statusDisplay.textContent = '✅ Brújula lista';
+                sensorInfoDisplay.textContent = '🎯 Usando AbsoluteOrientationSensor';
             }
         });
         
         // Evento de error
-        magnetometer.addEventListener('error', (event) => {
+        sensor.addEventListener('error', (event) => {
             const error = event.error || event;
-            console.error('Magnetometer error:', error);
+            console.error('Sensor error:', error);
+            sensorInfoDisplay.textContent = '⚠️ Error: ' + (error.message || 'desconocido');
             
-            // Si falla, intentar con DeviceOrientation
-            if (!sensorActive) {
-                sensorInfoDisplay.textContent = '⚠️ Magnetometer falló, intentando DeviceOrientation...';
+            // Si falla, intentar con el fallback
+            if (!sensorActive && !useFallback) {
+                useFallback = true;
+                sensorInfoDisplay.textContent = '🔄 Fallback a DeviceOrientation...';
                 startDeviceOrientation();
             }
         });
         
         // Iniciar el sensor
-        magnetometer.start();
+        sensor.start();
         
-        // Timeout: si no hay datos en 3 segundos, probar DeviceOrientation
+        // Timeout: si no hay datos en 3 segundos, probar fallback
         setTimeout(() => {
-            if (!sensorActive) {
-                sensorInfoDisplay.textContent = '⏳ Magnetometer sin datos, probando DeviceOrientation...';
+            if (!sensorActive && !useFallback) {
+                useFallback = true;
+                sensorInfoDisplay.textContent = '⏳ Sin datos, probando DeviceOrientation...';
                 startDeviceOrientation();
             }
         }, 3000);
@@ -99,25 +130,29 @@ function startMagnetometer() {
         return true;
         
     } catch (error) {
-        console.error('Error iniciando Magnetometer:', error);
-        sensorInfoDisplay.textContent = '⚠️ Error en Magnetometer, probando DeviceOrientation...';
-        startDeviceOrientation();
+        console.error('Error iniciando AbsoluteOrientationSensor:', error);
+        sensorInfoDisplay.textContent = '⚠️ Error en AbsoluteOrientationSensor';
+        
+        if (!useFallback) {
+            useFallback = true;
+            startDeviceOrientation();
+        }
         return false;
     }
 }
 
 // ============================================
-// INICIAR DEVICEORIENTATION (iOS y fallback)
+// FALLBACK: DEVICE ORIENTATION
 // ============================================
 function startDeviceOrientation() {
     try {
         if (typeof DeviceOrientationEvent === 'undefined') {
             statusDisplay.textContent = '❌ No hay sensores disponibles';
-            sensorInfoDisplay.textContent = '❌ Tu navegador no soporta sensores';
+            sensorInfoDisplay.textContent = '❌ Tu dispositivo no soporta sensores';
             return false;
         }
         
-        sensorInfoDisplay.textContent = '📱 Intentando DeviceOrientation...';
+        sensorInfoDisplay.textContent = '📱 Usando DeviceOrientation (fallback)';
         
         // iOS 13+ requiere permiso
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -127,7 +162,6 @@ function startDeviceOrientation() {
                     if (state === 'granted') {
                         window.addEventListener('deviceorientation', handleDeviceOrientation, true);
                         statusDisplay.textContent = '✅ Permiso concedido';
-                        sensorInfoDisplay.textContent = '🍎 Usando DeviceOrientation (iOS)';
                     } else {
                         statusDisplay.textContent = '❌ Permiso denegado';
                         sensorInfoDisplay.textContent = '❌ Acepta los permisos en Ajustes';
@@ -141,12 +175,11 @@ function startDeviceOrientation() {
             // Android y otros
             window.addEventListener('deviceorientation', handleDeviceOrientation, true);
             statusDisplay.textContent = '✅ Escuchando DeviceOrientation...';
-            sensorInfoDisplay.textContent = '📱 Usando DeviceOrientation (Android)';
             
             // Timeout para verificar si hay datos
             setTimeout(() => {
                 if (!sensorActive) {
-                    statusDisplay.textContent = '⚠️ Mueve el teléfono en forma de 8';
+                    statusDisplay.textContent = '🔄 Mueve el teléfono en forma de 8';
                     sensorInfoDisplay.textContent = '🔄 Calibrando sensor magnético...';
                 }
             }, 3000);
@@ -162,7 +195,7 @@ function startDeviceOrientation() {
 }
 
 // ============================================
-// MANEJAR DEVICEORIENTATION
+// MANEJAR DEVICE ORIENTATION (FALLBACK)
 // ============================================
 function handleDeviceOrientation(event) {
     let heading = null;
@@ -170,7 +203,7 @@ function handleDeviceOrientation(event) {
     // iOS
     if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
         heading = event.webkitCompassHeading;
-        sensorType = 'deviceorientation-ios';
+        sensorType = 'fallback-ios';
         console.log('🍎 iOS heading:', heading);
         
         if (event.webkitCompassAccuracy !== undefined) {
@@ -188,17 +221,16 @@ function handleDeviceOrientation(event) {
     // Android
     else if (event.alpha !== undefined && event.alpha !== null && !isNaN(event.alpha)) {
         heading = event.alpha;
-        sensorType = 'deviceorientation-android';
+        sensorType = 'fallback-android';
         console.log('📱 Android heading:', heading);
         statusDisplay.textContent = '✅ Brújula lista';
     }
     
-    // Si tenemos heading válido
     if (heading !== null) {
         sensorActive = true;
         currentHeading = heading;
         updateCompass(heading);
-        sensorInfoDisplay.textContent = `📱 Usando ${sensorType === 'deviceorientation-ios' ? 'iOS' : 'Android'} DeviceOrientation`;
+        sensorInfoDisplay.textContent = `📱 Usando ${sensorType === 'fallback-ios' ? 'iOS' : 'Android'} DeviceOrientation (fallback)`;
     }
 }
 
@@ -210,7 +242,6 @@ function updateCompass(heading) {
     heading = (heading + calibrationOffset) % 360;
     if (heading < 0) heading += 360;
     
-    // Guardar el valor actual
     currentHeading = heading;
     
     // Actualizar la aguja
@@ -259,8 +290,6 @@ function calibrateCompass() {
             isCalibrating = false;
             calibrateBtn.textContent = '🔄 Calibrar';
             statusDisplay.textContent = `✅ Calibrado (offset: ${Math.round(calibrationOffset)}°)`;
-            
-            // Actualizar inmediatamente
             updateCompass(currentHeading);
         }
     }, 200);
@@ -273,32 +302,26 @@ async function init() {
     statusDisplay.textContent = '🔄 Iniciando brújula...';
     sensorInfoDisplay.textContent = '🔍 Detectando sensores...';
     
-    // Esperar un momento
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Verificar si el dispositivo es iOS
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /android/i.test(navigator.userAgent);
     
     console.log(`📱 Dispositivo: ${isIOS ? 'iOS' : isAndroid ? 'Android' : 'Otro'}`);
     
     if (isIOS) {
-        // En iOS usar DeviceOrientation
+        // En iOS usar DeviceOrientation directamente
         sensorInfoDisplay.textContent = '🍎 Detectado iOS - usando DeviceOrientation';
         startDeviceOrientation();
-    } else if (isAndroid) {
-        // En Android intentar Magnetometer primero
-        sensorInfoDisplay.textContent = '🤖 Detectado Android - probando Magnetometer...';
-        const magnetometerStarted = startMagnetometer();
-        
-        // Si Magnetometer no se inició, probar DeviceOrientation
-        if (!magnetometerStarted) {
-            startDeviceOrientation();
-        }
     } else {
-        // Otros dispositivos
-        sensorInfoDisplay.textContent = '💻 Dispositivo no móvil - probando DeviceOrientation...';
-        startDeviceOrientation();
+        // En Android y otros, probar AbsoluteOrientationSensor primero
+        sensorInfoDisplay.textContent = '🎯 Probando AbsoluteOrientationSensor...';
+        const started = startAbsoluteOrientation();
+        
+        // Si no se inició, el fallback se activa automáticamente
+        if (!started) {
+            sensorInfoDisplay.textContent = '⚠️ Iniciando fallback...';
+        }
     }
     
     console.log('🧭 Brújula Web iniciada');

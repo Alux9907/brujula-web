@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🧲 Test Magnetometer</title>
+    <title>🧪 Test Final - AbsoluteOrientation</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -38,15 +38,33 @@
         .warning { background: rgba(255, 170, 0, 0.3); color: #ffaa00; }
         .info { background: rgba(136, 204, 255, 0.2); color: #88ccff; }
         
+        .big-heading {
+            text-align: center;
+            padding: 30px;
+            background: rgba(240, 192, 64, 0.1);
+            border-radius: 15px;
+            border: 2px solid rgba(240, 192, 64, 0.3);
+            margin: 15px 0;
+        }
+        .big-heading .degrees {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #f0c040;
+        }
+        .big-heading .direction {
+            font-size: 2rem;
+            color: #88ccff;
+        }
+        
         .sensor-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin: 15px 0;
         }
         .sensor-card {
             background: rgba(255,255,255,0.05);
-            padding: 15px;
+            padding: 12px;
             border-radius: 10px;
             text-align: center;
         }
@@ -54,34 +72,12 @@
             font-size: 0.7rem;
             color: #888;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
         .sensor-value {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             font-weight: bold;
             color: #f0c040;
-            margin-top: 5px;
-            min-height: 35px;
-        }
-        .sensor-value.active { color: #4caf50; }
-        
-        .compass-display {
-            text-align: center;
-            margin: 20px 0;
-            padding: 20px;
-            background: rgba(240, 192, 64, 0.1);
-            border-radius: 15px;
-            border: 2px solid rgba(240, 192, 64, 0.3);
-        }
-        .compass-display .heading {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #f0c040;
-        }
-        .compass-display .direction {
-            font-size: 1.5rem;
-            color: #88ccff;
-            margin-top: 5px;
+            margin-top: 3px;
         }
         
         button {
@@ -99,17 +95,6 @@
         button:active { transform: scale(0.95); }
         button.secondary { background: #444; color: white; }
         
-        .help-text {
-            margin-top: 15px;
-            padding: 12px;
-            background: rgba(255,200,0,0.08);
-            border: 1px solid rgba(255,200,0,0.2);
-            border-radius: 8px;
-            font-size: 0.75rem;
-            color: #aaa;
-            line-height: 1.6;
-        }
-        .help-text strong { color: #f0c040; }
         .log-area {
             margin-top: 10px;
             padding: 10px;
@@ -117,220 +102,350 @@
             border-radius: 8px;
             font-size: 0.7rem;
             color: #666;
-            max-height: 150px;
+            max-height: 120px;
             overflow-y: auto;
             font-family: monospace;
         }
         .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .compatibility {
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
-            font-size: 0.85rem;
-        }
-        .compatible { background: rgba(76, 175, 80, 0.2); color: #4caf50; }
-        .incompatible { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🧲 Test Magnetometer</h1>
+        <h1>🧪 Test Sensores</h1>
         
         <div id="status" class="status-box info">🔄 Iniciando...</div>
-        <div id="compatibility" class="compatibility">🔍 Verificando compatibilidad...</div>
         
-        <div class="compass-display">
+        <div class="big-heading">
             <div>🧭 Rumbo</div>
-            <div class="heading" id="heading">---°</div>
+            <div class="degrees" id="heading">---°</div>
             <div class="direction" id="direction">---</div>
         </div>
         
         <div class="sensor-grid">
             <div class="sensor-card">
-                <div class="sensor-label">🧲 X</div>
-                <div id="magX" class="sensor-value">---</div>
+                <div class="sensor-label">Sensor</div>
+                <div class="sensor-value" id="sensorType" style="color:#88ccff;font-size:0.8rem;">---</div>
             </div>
             <div class="sensor-card">
-                <div class="sensor-label">🧲 Y</div>
-                <div id="magY" class="sensor-value">---</div>
-            </div>
-            <div class="sensor-card">
-                <div class="sensor-label">🧲 Z</div>
-                <div id="magZ" class="sensor-value">---</div>
+                <div class="sensor-label">Estado</div>
+                <div class="sensor-value" id="sensorStatus" style="color:#88ccff;font-size:0.8rem;">---</div>
             </div>
         </div>
         
-        <button onclick="startMagnetometer()">📱 Iniciar Magnetometer</button>
+        <button onclick="testAll()">📱 Probar Todos los Sensores</button>
         <button onclick="window.location.reload()" class="secondary">🔄 Recargar</button>
-        
-        <div class="help-text">
-            <strong>📱 API Magnetometer (Chrome 90+ en Android)</strong><br>
-            1. Toca <strong>"Iniciar Magnetometer"</strong><br>
-            2. Mueve el teléfono para ver los valores cambiar<br>
-            3. El rumbo se calcula desde los valores magnéticos<br>
-            4. En Android: Ajustes > Apps > Chrome > Permisos > <strong>Sensores</strong>
-        </div>
         
         <div id="log" class="log-area"></div>
     </div>
 
     <script>
-        // Variables
-        let magnetometer = null;
-        let isRunning = false;
-        const logElement = document.getElementById('log');
-        const statusElement = document.getElementById('status');
-        const compatibilityElement = document.getElementById('compatibility');
+        let logElement = document.getElementById('log');
+        let statusElement = document.getElementById('status');
+        let headingEl = document.getElementById('heading');
+        let directionEl = document.getElementById('direction');
+        let sensorTypeEl = document.getElementById('sensorType');
+        let sensorStatusEl = document.getElementById('sensorStatus');
         
-        // Elementos
-        const headingEl = document.getElementById('heading');
-        const directionEl = document.getElementById('direction');
-        const magXEl = document.getElementById('magX');
-        const magYEl = document.getElementById('magY');
-        const magZEl = document.getElementById('magZ');
-
-        function addLog(message) {
+        let testRunning = false;
+        let heading = 0;
+        
+        function addLog(msg) {
             const entry = document.createElement('div');
             entry.className = 'log-entry';
-            const timestamp = new Date().toLocaleTimeString();
-            entry.textContent = `[${timestamp}] ${message}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
             logElement.appendChild(entry);
             logElement.scrollTop = logElement.scrollHeight;
-            console.log(message);
+            console.log(msg);
         }
-
-        function setStatus(message, type = 'info') {
-            statusElement.textContent = message;
+        
+        function setStatus(msg, type = 'info') {
+            statusElement.textContent = msg;
             statusElement.className = `status-box ${type}`;
         }
-
-        function getDirection(degrees) {
-            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-            const index = Math.round(degrees / 45) % 8;
-            return directions[index];
+        
+        function getDirection(deg) {
+            const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            return dirs[Math.round(deg / 45) % 8];
         }
-
-        function calculateHeading(x, y) {
-            let heading = Math.atan2(y, x) * (180 / Math.PI);
+        
+        function updateDisplay(deg) {
+            heading = deg;
+            headingEl.textContent = Math.round(deg) + '°';
+            directionEl.textContent = getDirection(deg);
+        }
+        
+        function quaternionToHeading(q) {
+            const x = q[0], y = q[1], z = q[2], w = q[3];
+            const siny = 2 * (w * z + x * y);
+            const cosy = 1 - 2 * (y * y + z * z);
+            let heading = Math.atan2(siny, cosy) * (180 / Math.PI);
             heading = (heading + 360) % 360;
-            heading = (heading + 90) % 360;
             return heading;
         }
-
-        function startMagnetometer() {
-            if (!window.Magnetometer) {
-                setStatus('❌ Magnetometer API no disponible', 'error');
-                addLog('❌ Magnetometer API no disponible');
-                compatibilityElement.textContent = '❌ No compatible - Necesitas Chrome 90+ en Android';
-                compatibilityElement.className = 'compatibility incompatible';
-                return;
-            }
-            
-            if (isRunning) {
-                addLog('⏹️ Deteniendo sensor...');
-                if (magnetometer) {
-                    magnetometer.stop();
-                    magnetometer = null;
+        
+        // ============================================
+        // TEST: ABSOLUTE ORIENTATION SENSOR
+        // ============================================
+        function testAbsoluteOrientation() {
+            return new Promise((resolve) => {
+                if (!window.AbsoluteOrientationSensor) {
+                    addLog('❌ AbsoluteOrientationSensor no disponible');
+                    resolve(false);
+                    return;
                 }
-                isRunning = false;
-                setStatus('⏹️ Sensor detenido', 'info');
-                return;
-            }
-            
-            try {
-                setStatus('🔄 Iniciando Magnetometer...', 'info');
-                addLog('📱 Creando Magnetometer...');
                 
-                magnetometer = new Magnetometer({ frequency: 60 });
+                addLog('📱 Probando AbsoluteOrientationSensor...');
+                sensorTypeEl.textContent = 'AbsoluteOrientation';
+                sensorStatusEl.textContent = '🔄 Conectando...';
                 
-                magnetometer.addEventListener('reading', () => {
-                    const x = magnetometer.x;
-                    const y = magnetometer.y;
-                    const z = magnetometer.z;
+                try {
+                    const sensor = new AbsoluteOrientationSensor({ frequency: 60 });
                     
-                    magXEl.textContent = x !== null ? x.toFixed(2) : '---';
-                    magYEl.textContent = y !== null ? y.toFixed(2) : '---';
-                    magZEl.textContent = z !== null ? z.toFixed(2) : '---';
+                    let resolved = false;
                     
-                    if (x !== null) magXEl.className = 'sensor-value active';
-                    if (y !== null) magYEl.className = 'sensor-value active';
-                    if (z !== null) magZEl.className = 'sensor-value active';
+                    sensor.addEventListener('reading', () => {
+                        if (!resolved) {
+                            resolved = true;
+                            let deg = null;
+                            
+                            if (sensor.quaternion) {
+                                deg = quaternionToHeading(sensor.quaternion);
+                            } else if (sensor.rotationMatrix) {
+                                const m = sensor.rotationMatrix;
+                                deg = Math.atan2(m[4], m[0]) * (180 / Math.PI);
+                                deg = (deg + 360) % 360;
+                            }
+                            
+                            if (deg !== null && !isNaN(deg)) {
+                                addLog(`✅ AbsoluteOrientation: ${Math.round(deg)}°`);
+                                setStatus('✅ ¡Funciona!', 'success');
+                                updateDisplay(deg);
+                                sensorTypeEl.textContent = 'AbsoluteOrientation ✅';
+                                sensorStatusEl.textContent = 'Funcionando';
+                                sensor.stop();
+                                resolve(true);
+                            }
+                        }
+                    });
                     
-                    if (x !== null && y !== null && !isNaN(x) && !isNaN(y)) {
-                        const heading = calculateHeading(x, y);
-                        headingEl.textContent = Math.round(heading) + '°';
-                        headingEl.className = 'heading';
-                        
-                        const direction = getDirection(heading);
-                        directionEl.textContent = direction;
-                        
-                        setStatus('✅ Magnetometer funcionando!', 'success');
-                        addLog(`🧭 Rumbo: ${Math.round(heading)}° (${direction})`);
+                    sensor.addEventListener('error', (e) => {
+                        if (!resolved) {
+                            resolved = true;
+                            addLog('❌ Error: ' + (e.error?.message || 'desconocido'));
+                            sensorTypeEl.textContent = 'AbsoluteOrientation ❌';
+                            sensorStatusEl.textContent = 'Error';
+                            resolve(false);
+                        }
+                    });
+                    
+                    sensor.start();
+                    
+                    setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            addLog('⏳ Timeout - sin datos');
+                            sensorTypeEl.textContent = 'AbsoluteOrientation ⏳';
+                            sensorStatusEl.textContent = 'Timeout';
+                            sensor.stop();
+                            resolve(false);
+                        }
+                    }, 4000);
+                    
+                } catch (e) {
+                    addLog('❌ Error: ' + e.message);
+                    resolve(false);
+                }
+            });
+        }
+        
+        // ============================================
+        // TEST: MAGNETOMETER
+        // ============================================
+        function testMagnetometer() {
+            return new Promise((resolve) => {
+                if (!window.Magnetometer) {
+                    addLog('❌ Magnetometer no disponible');
+                    resolve(false);
+                    return;
+                }
+                
+                addLog('🧲 Probando Magnetometer...');
+                sensorTypeEl.textContent = 'Magnetometer';
+                sensorStatusEl.textContent = '🔄 Conectando...';
+                
+                try {
+                    const sensor = new Magnetometer({ frequency: 60 });
+                    let resolved = false;
+                    
+                    sensor.addEventListener('reading', () => {
+                        if (!resolved) {
+                            resolved = true;
+                            const x = sensor.x, y = sensor.y;
+                            
+                            if (x !== null && y !== null && !isNaN(x) && !isNaN(y)) {
+                                let deg = Math.atan2(y, x) * (180 / Math.PI);
+                                deg = (deg + 360) % 360;
+                                deg = (deg + 90) % 360;
+                                
+                                addLog(`✅ Magnetometer: ${Math.round(deg)}°`);
+                                setStatus('✅ ¡Funciona!', 'success');
+                                updateDisplay(deg);
+                                sensorTypeEl.textContent = 'Magnetometer ✅';
+                                sensorStatusEl.textContent = 'Funcionando';
+                                sensor.stop();
+                                resolve(true);
+                            }
+                        }
+                    });
+                    
+                    sensor.addEventListener('error', (e) => {
+                        if (!resolved) {
+                            resolved = true;
+                            addLog('❌ Error Magnetometer');
+                            sensorTypeEl.textContent = 'Magnetometer ❌';
+                            sensorStatusEl.textContent = 'Error';
+                            resolve(false);
+                        }
+                    });
+                    
+                    sensor.start();
+                    
+                    setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            addLog('⏳ Timeout Magnetometer');
+                            sensorTypeEl.textContent = 'Magnetometer ⏳';
+                            sensorStatusEl.textContent = 'Timeout';
+                            sensor.stop();
+                            resolve(false);
+                        }
+                    }, 4000);
+                    
+                } catch (e) {
+                    addLog('❌ Error: ' + e.message);
+                    resolve(false);
+                }
+            });
+        }
+        
+        // ============================================
+        // TEST: DEVICE ORIENTATION
+        // ============================================
+        function testDeviceOrientation() {
+            return new Promise((resolve) => {
+                if (typeof DeviceOrientationEvent === 'undefined') {
+                    addLog('❌ DeviceOrientation no disponible');
+                    resolve(false);
+                    return;
+                }
+                
+                addLog('📱 Probando DeviceOrientation...');
+                sensorTypeEl.textContent = 'DeviceOrientation';
+                sensorStatusEl.textContent = '🔄 Conectando...';
+                
+                let resolved = false;
+                let handler = null;
+                
+                const checkEvent = (e) => {
+                    let deg = null;
+                    
+                    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
+                        deg = e.webkitCompassHeading;
+                    } else if (e.alpha !== undefined && e.alpha !== null && !isNaN(e.alpha)) {
+                        deg = e.alpha;
                     }
-                });
+                    
+                    if (deg !== null && !isNaN(deg)) {
+                        if (!resolved) {
+                            resolved = true;
+                            addLog(`✅ DeviceOrientation: ${Math.round(deg)}°`);
+                            setStatus('✅ ¡Funciona!', 'success');
+                            updateDisplay(deg);
+                            sensorTypeEl.textContent = 'DeviceOrientation ✅';
+                            sensorStatusEl.textContent = 'Funcionando';
+                            window.removeEventListener('deviceorientation', handler);
+                            resolve(true);
+                        }
+                    }
+                };
                 
-                magnetometer.addEventListener('error', (event) => {
-                    const error = event.error || event;
-                    setStatus('❌ Error: ' + (error.message || 'Desconocido'), 'error');
-                    addLog('❌ Error en sensor: ' + JSON.stringify(error));
-                });
+                handler = checkEvent;
                 
-                magnetometer.start();
-                isRunning = true;
-                setStatus('✅ Magnetometer iniciado', 'success');
-                addLog('✅ Magnetometer iniciado correctamente');
-                compatibilityElement.textContent = '✅ Compatible - Magnetometer API disponible';
-                compatibilityElement.className = 'compatibility compatible';
-                
-            } catch (error) {
-                setStatus('❌ Error: ' + error.message, 'error');
-                addLog('❌ Error: ' + error.message);
-                isRunning = false;
-            }
-        }
-
-        function checkCompatibility() {
-            const isAndroid = /android/i.test(navigator.userAgent);
-            const isChrome = /chrome/i.test(navigator.userAgent);
-            
-            let msg = `📱 ${isAndroid ? 'Android' : 'Otro OS'} | ${isChrome ? 'Chrome' : 'Otro navegador'}`;
-            
-            if (window.Magnetometer) {
-                msg += ' | ✅ Magnetometer disponible';
-                compatibilityElement.textContent = msg;
-                compatibilityElement.className = 'compatibility compatible';
-                addLog('✅ Magnetometer API disponible');
-            } else {
-                msg += ' | ❌ Magnetometer NO disponible';
-                compatibilityElement.textContent = msg + ' - Usa Chrome 90+ en Android';
-                compatibilityElement.className = 'compatibility incompatible';
-                addLog('❌ Magnetometer API no disponible');
-            }
-        }
-
-        function init() {
-            addLog('🚀 Iniciando test Magnetometer...');
-            setStatus('🔄 Verificando compatibilidad...', 'info');
-            checkCompatibility();
-            
-            setTimeout(() => {
-                if (window.Magnetometer) {
-                    addLog('📱 Iniciando automáticamente...');
-                    startMagnetometer();
+                // iOS necesita permiso
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(state => {
+                            if (state === 'granted') {
+                                window.addEventListener('deviceorientation', handler, true);
+                            } else {
+                                resolved = true;
+                                addLog('❌ Permiso denegado');
+                                sensorTypeEl.textContent = 'DeviceOrientation ❌';
+                                sensorStatusEl.textContent = 'Permiso denegado';
+                                resolve(false);
+                            }
+                        });
                 } else {
-                    setStatus('⚠️ Toca "Iniciar Magnetometer" para probar', 'warning');
+                    window.addEventListener('deviceorientation', handler, true);
                 }
-            }, 1500);
+                
+                setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        addLog('⏳ Timeout DeviceOrientation');
+                        sensorTypeEl.textContent = 'DeviceOrientation ⏳';
+                        sensorStatusEl.textContent = 'Timeout';
+                        window.removeEventListener('deviceorientation', handler);
+                        resolve(false);
+                    }
+                }, 4000);
+            });
         }
-
-        document.addEventListener('click', () => {
-            if (!isRunning && window.Magnetometer) {
-                addLog('👆 Click detectado - iniciando...');
-                startMagnetometer();
+        
+        // ============================================
+        // PROBAR TODOS
+        // ============================================
+        async function testAll() {
+            if (testRunning) return;
+            testRunning = true;
+            
+            addLog('🚀 Iniciando pruebas...');
+            setStatus('🔄 Probando sensores...', 'info');
+            
+            // Reset
+            headingEl.textContent = '---°';
+            directionEl.textContent = '---';
+            
+            // Probar en orden
+            const tests = [
+                { name: 'AbsoluteOrientation', fn: testAbsoluteOrientation },
+                { name: 'Magnetometer', fn: testMagnetometer },
+                { name: 'DeviceOrientation', fn: testDeviceOrientation }
+            ];
+            
+            for (const test of tests) {
+                addLog(`🔍 Probando ${test.name}...`);
+                const result = await test.fn();
+                if (result) {
+                    addLog(`✅ ${test.name} funciona!`);
+                    testRunning = false;
+                    return;
+                }
+                addLog(`❌ ${test.name} no funciona`);
             }
-        }, { once: false });
-
-        init();
+            
+            addLog('❌ Ningún sensor funciona');
+            setStatus('❌ No se detectaron sensores', 'error');
+            sensorTypeEl.textContent = '❌ Ninguno';
+            sensorStatusEl.textContent = 'No disponible';
+            testRunning = false;
+        }
+        
+        // ============================================
+        // INICIAR AUTOMÁTICAMENTE
+        // ============================================
+        addLog('🚀 Iniciando test automático...');
+        setTimeout(testAll, 1000);
     </script>
 </body>
 </html>
