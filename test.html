@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Sensores</title>
+</head>
+<body>
+    <h1>🧪 Test de Sensores</h1>
+    <p id="status">Esperando...</p>
+    <p>Alpha: <span id="alpha">---</span>°</p>
+    <p>Beta: <span id="beta">---</span>°</p>
+    <p>Gamma: <span id="gamma">---</span>°</p>
+    <p>webkitCompassHeading: <span id="compass">---</span>°</p>
+    
+    <button onclick="requestPermission()">📱 Solicitar Permiso</button>
+    
+    <script>
+        function requestPermission() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(state => {
+                        document.getElementById('status').textContent = 'Permiso: ' + state;
+                        if (state === 'granted') {
+                            window.addEventListener('deviceorientation', handleEvent);
+                        }
+                    });
+            } else {
+                window.addEventListener('deviceorientation', handleEvent);
+                document.getElementById('status').textContent = 'Escuchando...';
+            }
+        }
+        
+        function handleEvent(e) {
+            document.getElementById('alpha').textContent = e.alpha !== null ? Math.round(e.alpha) : '---';
+            document.getElementById('beta').textContent = e.beta !== null ? Math.round(e.beta) : '---';
+            document.getElementById('gamma').textContent = e.gamma !== null ? Math.round(e.gamma) : '---';
+            document.getElementById('compass').textContent = e.webkitCompassHeading !== undefined ? 
+                Math.round(e.webkitCompassHeading) : '---';
+            
+            if (e.alpha !== null || e.webkitCompassHeading !== undefined) {
+                document.getElementById('status').textContent = '✅ Sensores funcionando!';
+                document.getElementById('status').style.color = 'green';
+            }
+        }
+        
+        // Auto-iniciar
+        requestPermission();
+    </script>
+</body>
+</html>

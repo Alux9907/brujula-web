@@ -13,13 +13,16 @@ const calibrateBtn = document.getElementById('calibrate-btn');
 // FUNCIÓN PRINCIPAL: Manejar la orientación
 // ============================================
 function handleOrientation(event) {
-    let heading;
+    let heading = null;
     
-    // Detectar si es iOS (Safari) o Android/otros
-    if (event.webkitCompassHeading !== undefined) {
-        // iOS: usa la propiedad específica de WebKit
+    console.log('Evento de orientación recibido:', event);
+    
+    // DETECTAR iOS (Safari)
+    if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
         heading = event.webkitCompassHeading;
-        // iOS también puede darnos la precisión
+        console.log('iOS - webkitCompassHeading:', heading);
+        
+        // Precisión en iOS
         if (event.webkitCompassAccuracy !== undefined) {
             const accuracy = event.webkitCompassAccuracy;
             if (accuracy < 0) {
@@ -28,35 +31,36 @@ function handleOrientation(event) {
             } else if (accuracy > 20) {
                 statusDisplay.textContent = '🔄 Calibrando... mueve el teléfono en forma de 8';
             } else {
-                statusDisplay.textContent = '✅ Brújula lista';
+                statusDisplay.textContent = '✅ Brújula lista (iOS)';
             }
         }
-    } else if (event.alpha !== null) {
-        // Android y otros: usa 'alpha' (0-360 grados)
+    }
+    // DETECTAR Android y otros
+    else if (event.alpha !== undefined && event.alpha !== null) {
         heading = event.alpha;
-        // En algunos Android, 'alpha' puede ser respecto al norte magnético
-        // pero a veces necesita ajuste
+        console.log('Android/otros - alpha:', heading);
+        
         if (event.absolute === true) {
             statusDisplay.textContent = '✅ Brújula lista (absoluta)';
         } else {
             statusDisplay.textContent = '✅ Brújula lista (relativa)';
         }
-    } else {
-        // No se pudo obtener el rumbo
-        statusDisplay.textContent = '❌ Tu dispositivo no soporta brújula';
+    }
+    // Si no se pudo obtener el rumbo
+    else {
+        statusDisplay.textContent = '⚠️ Esperando datos del sensor...';
+        console.warn('No se pudo obtener heading del evento:', event);
         return;
     }
     
-    // Aplicar calibración manual si existe
+    // Aplicar calibración manual
     heading = (heading + calibrationOffset) % 360;
     if (heading < 0) heading += 360;
     
     // Guardar el valor actual
     currentHeading = heading;
     
-    // Actualizar la aguja (la aguja apunta al norte)
-    // La aguja está diseñada con la punta roja hacia arriba (Norte)
-    // Por lo tanto, rotamos en sentido contrario al rumbo para que apunte al norte
+    // Actualizar la aguja
     needle.style.transform = `translate(-50%, -100%) rotate(${-heading}deg)`;
     
     // Actualizar el display del rumbo
@@ -68,27 +72,53 @@ function handleOrientation(event) {
 // ============================================
 async function requestPermission() {
     try {
-        if (typeof DeviceOrientationEvent !== 'undefined' && 
-            typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS 13+ requiere permiso explícito
+        // Verificar si el navegador soporta DeviceOrientationEvent
+        if (typeof DeviceOrientationEvent === 'undefined') {
+            statusDisplay.textContent = '❌ Tu navegador no soporta DeviceOrientation';
+            return false;
+        }
+        
+        // iOS 13+ requiere permiso explícito
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            statusDisplay.textContent = '🔐 Solicitando permiso...';
             const permissionState = await DeviceOrientationEvent.requestPermission();
+            console.log('Permiso iOS:', permissionState);
+            
             if (permissionState === 'granted') {
                 statusDisplay.textContent = '✅ Permiso concedido';
                 window.addEventListener('deviceorientation', handleOrientation, true);
+                
+                // Verificar si llegan datos
+                setTimeout(() => {
+                    if (currentHeading === 0) {
+                        statusDisplay.textContent = '⏳ Esperando datos del sensor...';
+                    }
+                }, 2000);
+                
                 return true;
             } else {
-                statusDisplay.textContent = '❌ Permiso denegado';
+                statusDisplay.textContent = '❌ Permiso denegado por el usuario';
                 return false;
             }
         } else {
-            // Android y iOS antiguos: no necesitan permiso explícito
+            // Android y iOS antiguos
+            statusDisplay.textContent = '✅ Conectando al sensor...';
             window.addEventListener('deviceorientation', handleOrientation, true);
-            statusDisplay.textContent = '✅ Brújula activa';
+            
+            // Verificar si llegan datos después de 3 segundos
+            setTimeout(() => {
+                if (currentHeading === 0) {
+                    statusDisplay.textContent = '⏳ Mueve el teléfono para activar el sensor';
+                } else {
+                    statusDisplay.textContent = '✅ Brújula activa';
+                }
+            }, 3000);
+            
             return true;
         }
     } catch (error) {
         console.error('Error al solicitar permiso:', error);
-        statusDisplay.textContent = '❌ Error al acceder al sensor';
+        statusDisplay.textContent = '❌ Error: ' + error.message;
         return false;
     }
 }
@@ -98,10 +128,14 @@ async function requestPermission() {
 // ============================================
 function calibrateCompass() {
     if (isCalibrating) return;
+    if (currentHeading === 0) {
+        statusDisplay.textContent = '⚠️ Espera a que la brújula se active';
+        return;
+    }
+    
     isCalibrating = true;
     calibrateBtn.textContent = '🔄 Calibrando...';
     
-    // Tomar varias lecturas y promediar
     let readings = [];
     const maxReadings = 10;
     let count = 0;
@@ -116,16 +150,11 @@ function calibrateCompass() {
         if (count >= maxReadings) {
             clearInterval(interval);
             
-            // Calcular el promedio
             const avg = readings.reduce((a, b) => a + b, 0) / readings.length;
             
-            // Si el promedio es cercano a 0, no hay offset
-            // Si está cerca de 360, también es 0
             let offset = 0;
             if (avg > 10 && avg < 350) {
-                // El usuario puede elegir "poner a cero" el rumbo actual
                 offset = -avg;
-                // Si el offset es negativo, sumamos 360
                 while (offset < 0) offset += 360;
             }
             
@@ -134,11 +163,35 @@ function calibrateCompass() {
             calibrateBtn.textContent = '🔄 Calibrar';
             statusDisplay.textContent = `✅ Calibrado (offset: ${Math.round(calibrationOffset)}°)`;
             
-            // Actualizar inmediatamente
             const fakeEvent = { alpha: currentHeading, webkitCompassHeading: currentHeading };
             handleOrientation(fakeEvent);
         }
     }, 200);
+}
+
+// ============================================
+// DETECTAR SI EL DISPOSITIVO TIENE SENSORES
+// ============================================
+function checkSensorSupport() {
+    // Verificar si el navegador soporta DeviceOrientation
+    if (typeof DeviceOrientationEvent === 'undefined') {
+        statusDisplay.textContent = '❌ Tu navegador no soporta sensores de orientación';
+        return false;
+    }
+    
+    // En Android, podemos verificar si existe el sensor
+    if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'sensors' })
+            .then(result => {
+                console.log('Permiso de sensores:', result.state);
+                if (result.state === 'denied') {
+                    statusDisplay.textContent = '❌ Permiso de sensores denegado';
+                }
+            })
+            .catch(err => console.log('No se pudo verificar permisos:', err));
+    }
+    
+    return true;
 }
 
 // ============================================
@@ -147,7 +200,12 @@ function calibrateCompass() {
 async function init() {
     statusDisplay.textContent = '🔄 Iniciando brújula...';
     
-    // Esperar un momento para que el dispositivo esté listo
+    // Verificar soporte
+    if (!checkSensorSupport()) {
+        return;
+    }
+    
+    // Esperar un momento
     await new Promise(resolve => setTimeout(resolve, 500));
     
     const success = await requestPermission();
@@ -155,6 +213,14 @@ async function init() {
     if (!success) {
         statusDisplay.textContent = '❌ No se pudo iniciar la brújula';
     }
+    
+    // Mensaje de ayuda
+    console.log('🧭 Brújula Web iniciada');
+    console.log('📱 Si no funciona, prueba:');
+    console.log('   1. Asegúrate de estar en HTTPS');
+    console.log('   2. Acepta los permisos del navegador');
+    console.log('   3. Mueve el teléfono en forma de 8');
+    console.log('   4. En iOS: ve a Configuración > Safari > Permisos');
 }
 
 // ============================================
@@ -172,7 +238,3 @@ window.addEventListener('error', (e) => {
     console.error('Error:', e);
     statusDisplay.textContent = '❌ Error: ' + e.message;
 });
-
-// Mostrar mensaje en consola
-console.log('🧭 Brújula Web iniciada');
-console.log('📱 Abre esta página en tu teléfono para probarla');
