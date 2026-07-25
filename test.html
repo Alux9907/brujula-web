@@ -2,50 +2,240 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Sensores</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🧪 Test Sensores</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            max-width: 400px;
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 { color: #f0c040; margin-bottom: 20px; }
+        .value {
+            font-size: 2rem;
+            color: #88ccff;
+            margin: 10px 0;
+        }
+        .label { color: #aaa; font-size: 0.9rem; }
+        button {
+            background: #f0c040;
+            color: #1a1a2e;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            margin: 10px;
+            cursor: pointer;
+        }
+        #status { 
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            background: rgba(255,255,255,0.05);
+        }
+        .success { color: #4caf50; }
+        .error { color: #ff4444; }
+        .warning { color: #ffaa00; }
+        .info { color: #88ccff; }
+    </style>
 </head>
 <body>
-    <h1>🧪 Test de Sensores</h1>
-    <p id="status">Esperando...</p>
-    <p>Alpha: <span id="alpha">---</span>°</p>
-    <p>Beta: <span id="beta">---</span>°</p>
-    <p>Gamma: <span id="gamma">---</span>°</p>
-    <p>webkitCompassHeading: <span id="compass">---</span>°</p>
-    
-    <button onclick="requestPermission()">📱 Solicitar Permiso</button>
-    
+    <div class="container">
+        <h1>🧪 Test de Sensores</h1>
+        
+        <div id="status" class="info">🔄 Iniciando...</div>
+        
+        <div>
+            <div class="label">🧭 Alpha (Rumbo)</div>
+            <div class="value" id="alpha">---°</div>
+        </div>
+        
+        <div>
+            <div class="label">📐 Beta (Inclinación)</div>
+            <div class="value" id="beta">---°</div>
+        </div>
+        
+        <div>
+            <div class="label">📐 Gamma (Rotación)</div>
+            <div class="value" id="gamma">---°</div>
+        </div>
+        
+        <div>
+            <div class="label">🍎 Compass (iOS)</div>
+            <div class="value" id="compass">---°</div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button onclick="requestPermission()">📱 Solicitar Permiso</button>
+            <button onclick="window.location.reload()">🔄 Recargar</button>
+        </div>
+        
+        <div style="margin-top: 15px; font-size: 0.8rem; color: #666;">
+            Toca la pantalla para activar los sensores
+        </div>
+    </div>
+
     <script>
+        let sensorActive = false;
+        let retryCount = 0;
+        
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+        }
+        
         function requestPermission() {
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            updateStatus('🔄 Solicitando permiso...', 'info');
+            
+            if (typeof DeviceOrientationEvent !== 'undefined' && 
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                
                 DeviceOrientationEvent.requestPermission()
                     .then(state => {
-                        document.getElementById('status').textContent = 'Permiso: ' + state;
+                        console.log('Permiso:', state);
                         if (state === 'granted') {
-                            window.addEventListener('deviceorientation', handleEvent);
+                            updateStatus('✅ Permiso concedido', 'success');
+                            startListening();
+                        } else {
+                            updateStatus('❌ Permiso denegado: ' + state, 'error');
                         }
+                    })
+                    .catch(err => {
+                        console.error('Error:', err);
+                        updateStatus('❌ Error: ' + err.message, 'error');
                     });
             } else {
-                window.addEventListener('deviceorientation', handleEvent);
-                document.getElementById('status').textContent = 'Escuchando...';
+                updateStatus('✅ No necesita permiso en este navegador', 'success');
+                startListening();
             }
         }
         
-        function handleEvent(e) {
-            document.getElementById('alpha').textContent = e.alpha !== null ? Math.round(e.alpha) : '---';
-            document.getElementById('beta').textContent = e.beta !== null ? Math.round(e.beta) : '---';
-            document.getElementById('gamma').textContent = e.gamma !== null ? Math.round(e.gamma) : '---';
-            document.getElementById('compass').textContent = e.webkitCompassHeading !== undefined ? 
+        function startListening() {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+            window.addEventListener('devicemotion', handleMotion, true);
+            
+            updateStatus('👂 Escuchando sensores...', 'info');
+            
+            // Activar con toque en Android
+            document.addEventListener('click', function firstClick() {
+                console.log('👆 Click detectado');
+                document.removeEventListener('click', firstClick);
+                // Forzar una lectura
+                window.dispatchEvent(new Event('deviceorientation'));
+            }, { once: true });
+            
+            // Si después de 3 segundos no hay datos, mostrar ayuda
+            setTimeout(() => {
+                if (!sensorActive) {
+                    updateStatus('⚠️ Mueve el teléfono en forma de 8', 'warning');
+                }
+            }, 3000);
+            
+            // Reintentar cada 5 segundos si no hay datos
+            const interval = setInterval(() => {
+                if (!sensorActive && retryCount < 6) {
+                    retryCount++;
+                    console.log(`Reintento ${retryCount}...`);
+                    updateStatus(`🔄 Reintentando (${retryCount}/6)...`, 'info');
+                    
+                    // Reiniciar listener
+                    window.removeEventListener('deviceorientation', handleOrientation);
+                    window.addEventListener('deviceorientation', handleOrientation, true);
+                } else if (sensorActive) {
+                    clearInterval(interval);
+                } else if (retryCount >= 6) {
+                    clearInterval(interval);
+                    updateStatus('❌ No se detectaron sensores. Verifica permisos.', 'error');
+                }
+            }, 3000);
+        }
+        
+        function handleOrientation(e) {
+            const alpha = e.alpha !== null ? Math.round(e.alpha) : '---';
+            const beta = e.beta !== null ? Math.round(e.beta) : '---';
+            const gamma = e.gamma !== null ? Math.round(e.gamma) : '---';
+            const compass = e.webkitCompassHeading !== undefined ? 
                 Math.round(e.webkitCompassHeading) : '---';
             
-            if (e.alpha !== null || e.webkitCompassHeading !== undefined) {
-                document.getElementById('status').textContent = '✅ Sensores funcionando!';
-                document.getElementById('status').style.color = 'green';
+            document.getElementById('alpha').textContent = alpha + '°';
+            document.getElementById('beta').textContent = beta + '°';
+            document.getElementById('gamma').textContent = gamma + '°';
+            document.getElementById('compass').textContent = compass + '°';
+            
+            // Verificar si hay datos reales
+            if ((alpha !== '---' && alpha !== 0) || compass !== '---') {
+                sensorActive = true;
+                updateStatus('✅ ¡Sensores funcionando!', 'success');
+                
+                // Si alpha es 0 pero compass tiene datos, es iOS
+                if (compass !== '---') {
+                    updateStatus('✅ ¡Sensores funcionando! (iOS)', 'success');
+                }
+            } else if (alpha === 0) {
+                // Alpha 0 significa que el sensor está activo pero no calibrado
+                updateStatus('⚠️ Sensor activo - Mueve en 8 para calibrar', 'warning');
+                sensorActive = true; // Considerarlo activo
+            }
+            
+            console.log('Orientación:', { alpha, beta, gamma, compass });
+        }
+        
+        function handleMotion(e) {
+            const acc = e.acceleration;
+            if (acc && (acc.x !== null || acc.y !== null || acc.z !== null)) {
+                console.log('📱 Movimiento detectado:', acc);
+                if (!sensorActive) {
+                    updateStatus('📱 Movimiento detectado - activando orientación...', 'info');
+                }
             }
         }
         
         // Auto-iniciar
         requestPermission();
+        
+        // Mostrar ayuda si no funciona después de 10 segundos
+        setTimeout(() => {
+            if (!sensorActive) {
+                const helpDiv = document.createElement('div');
+                helpDiv.style.cssText = `
+                    margin-top: 20px;
+                    padding: 15px;
+                    background: rgba(255,200,0,0.1);
+                    border: 1px solid #f0c040;
+                    border-radius: 10px;
+                    text-align: left;
+                    font-size: 0.8rem;
+                `;
+                helpDiv.innerHTML = `
+                    <p style="color:#f0c040;"><strong>📱 Soluciones:</strong></p>
+                    <ul style="color:#aaa; padding-left:20px;">
+                        <li>✅ Asegúrate de usar <strong>HTTPS</strong></li>
+                        <li>🔄 Mueve el teléfono en <strong>forma de 8</strong></li>
+                        <li>📱 Usa <strong>Chrome</strong> en Android</li>
+                        <li>🍎 En iOS: Ajustes > Safari > Acceso a movimiento</li>
+                        <li>🔐 Acepta todos los permisos</li>
+                    </ul>
+                `;
+                document.querySelector('.container').appendChild(helpDiv);
+            }
+        }, 10000);
     </script>
 </body>
 </html>
