@@ -3,34 +3,175 @@ let currentHeading = 0;
 let isCalibrating = false;
 let calibrationOffset = 0;
 let sensorActive = false;
-let retryCount = 0;
-const maxRetries = 5;
+let sensorType = 'ninguno';
+let magnetometer = null;
 
 // Elementos del DOM
 const needle = document.getElementById('needle');
 const headingDisplay = document.getElementById('heading');
 const statusDisplay = document.getElementById('status');
+const sensorInfoDisplay = document.getElementById('sensor-info');
 const calibrateBtn = document.getElementById('calibrate-btn');
 
 // ============================================
-// FUNCIÓN PRINCIPAL: Manejar la orientación
+// CALCULAR RUMBO DESDE MAGNETÓMETRO
 // ============================================
-function handleOrientation(event) {
+function calculateHeadingFromMagnetometer(x, y) {
+    if (x === null || y === null || isNaN(x) || isNaN(y)) {
+        return null;
+    }
+    
+    // Fórmula estándar para el rumbo desde el magnetómetro
+    let heading = Math.atan2(y, x) * (180 / Math.PI);
+    
+    // Normalizar a 0-360 grados
+    heading = (heading + 360) % 360;
+    
+    // Ajustar para que 0 = Norte (el sensor magnético da 0 = Este)
+    heading = (heading + 90) % 360;
+    
+    return heading;
+}
+
+// ============================================
+// INICIAR MAGNETOMETER (Android)
+// ============================================
+function startMagnetometer() {
+    try {
+        // Verificar si la API está disponible
+        if (!window.Magnetometer) {
+            console.warn('Magnetometer API no disponible');
+            return false;
+        }
+        
+        sensorInfoDisplay.textContent = '🔍 Intentando Magnetometer API...';
+        statusDisplay.textContent = '🔄 Iniciando Magnetometer...';
+        
+        // Crear el sensor con frecuencia alta
+        magnetometer = new Magnetometer({ frequency: 60 });
+        
+        // Evento cuando hay lectura
+        magnetometer.addEventListener('reading', () => {
+            const x = magnetometer.x;
+            const y = magnetometer.y;
+            const z = magnetometer.z;
+            
+            console.log('🧲 Magnetometer:', { x, y, z });
+            
+            // Calcular rumbo
+            const heading = calculateHeadingFromMagnetometer(x, y);
+            
+            if (heading !== null) {
+                sensorActive = true;
+                sensorType = 'magnetometer';
+                currentHeading = heading;
+                
+                // Actualizar UI
+                updateCompass(heading);
+                statusDisplay.textContent = '✅ Brújula (Magnetometer)';
+                sensorInfoDisplay.textContent = '🧲 Usando Magnetometer API';
+            }
+        });
+        
+        // Evento de error
+        magnetometer.addEventListener('error', (event) => {
+            const error = event.error || event;
+            console.error('Magnetometer error:', error);
+            
+            // Si falla, intentar con DeviceOrientation
+            if (!sensorActive) {
+                sensorInfoDisplay.textContent = '⚠️ Magnetometer falló, intentando DeviceOrientation...';
+                startDeviceOrientation();
+            }
+        });
+        
+        // Iniciar el sensor
+        magnetometer.start();
+        
+        // Timeout: si no hay datos en 3 segundos, probar DeviceOrientation
+        setTimeout(() => {
+            if (!sensorActive) {
+                sensorInfoDisplay.textContent = '⏳ Magnetometer sin datos, probando DeviceOrientation...';
+                startDeviceOrientation();
+            }
+        }, 3000);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error iniciando Magnetometer:', error);
+        sensorInfoDisplay.textContent = '⚠️ Error en Magnetometer, probando DeviceOrientation...';
+        startDeviceOrientation();
+        return false;
+    }
+}
+
+// ============================================
+// INICIAR DEVICEORIENTATION (iOS y fallback)
+// ============================================
+function startDeviceOrientation() {
+    try {
+        if (typeof DeviceOrientationEvent === 'undefined') {
+            statusDisplay.textContent = '❌ No hay sensores disponibles';
+            sensorInfoDisplay.textContent = '❌ Tu navegador no soporta sensores';
+            return false;
+        }
+        
+        sensorInfoDisplay.textContent = '📱 Intentando DeviceOrientation...';
+        
+        // iOS 13+ requiere permiso
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(state => {
+                    console.log('Permiso iOS:', state);
+                    if (state === 'granted') {
+                        window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+                        statusDisplay.textContent = '✅ Permiso concedido';
+                        sensorInfoDisplay.textContent = '🍎 Usando DeviceOrientation (iOS)';
+                    } else {
+                        statusDisplay.textContent = '❌ Permiso denegado';
+                        sensorInfoDisplay.textContent = '❌ Acepta los permisos en Ajustes';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error en permiso:', err);
+                    statusDisplay.textContent = '❌ Error de permiso';
+                });
+        } else {
+            // Android y otros
+            window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+            statusDisplay.textContent = '✅ Escuchando DeviceOrientation...';
+            sensorInfoDisplay.textContent = '📱 Usando DeviceOrientation (Android)';
+            
+            // Timeout para verificar si hay datos
+            setTimeout(() => {
+                if (!sensorActive) {
+                    statusDisplay.textContent = '⚠️ Mueve el teléfono en forma de 8';
+                    sensorInfoDisplay.textContent = '🔄 Calibrando sensor magnético...';
+                }
+            }, 3000);
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error en DeviceOrientation:', error);
+        statusDisplay.textContent = '❌ Error en sensores';
+        return false;
+    }
+}
+
+// ============================================
+// MANEJAR DEVICEORIENTATION
+// ============================================
+function handleDeviceOrientation(event) {
     let heading = null;
     
-    console.log('📊 Evento recibido:', {
-        alpha: event.alpha,
-        beta: event.beta,
-        gamma: event.gamma,
-        webkitCompassHeading: event.webkitCompassHeading,
-        absolute: event.absolute
-    });
-    
-    // DETECTAR iOS (Safari)
+    // iOS
     if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
         heading = event.webkitCompassHeading;
-        sensorActive = true;
-        console.log('✅ iOS - heading:', heading);
+        sensorType = 'deviceorientation-ios';
+        console.log('🍎 iOS heading:', heading);
         
         if (event.webkitCompassAccuracy !== undefined) {
             const accuracy = event.webkitCompassAccuracy;
@@ -38,37 +179,33 @@ function handleOrientation(event) {
                 statusDisplay.textContent = '⚠️ Sensor no disponible';
                 return;
             } else if (accuracy > 20) {
-                statusDisplay.textContent = '🔄 Calibrando... mueve el teléfono en forma de 8';
+                statusDisplay.textContent = '🔄 Calibrando...';
             } else {
                 statusDisplay.textContent = '✅ Brújula lista';
             }
         }
     }
-    // DETECTAR Android y otros
-    else if (event.alpha !== undefined && event.alpha !== null && event.alpha !== 0) {
+    // Android
+    else if (event.alpha !== undefined && event.alpha !== null && !isNaN(event.alpha)) {
         heading = event.alpha;
-        sensorActive = true;
-        console.log('✅ Android - alpha:', heading);
-        
-        if (event.absolute === true) {
-            statusDisplay.textContent = '✅ Brújula lista (absoluta)';
-        } else {
-            statusDisplay.textContent = '✅ Brújula lista';
-        }
-    }
-    // Si alpha es 0, podría ser que el sensor no esté calibrado
-    else if (event.alpha === 0) {
-        console.log('⚠️ Alpha es 0 - sensor no calibrado');
-        statusDisplay.textContent = '🔄 Calibrando... mueve el teléfono en forma de 8';
-        return;
-    }
-    // Si no se pudo obtener el rumbo
-    else {
-        console.warn('⚠️ No se pudo obtener heading:', event);
-        statusDisplay.textContent = '⏳ Esperando datos del sensor...';
-        return;
+        sensorType = 'deviceorientation-android';
+        console.log('📱 Android heading:', heading);
+        statusDisplay.textContent = '✅ Brújula lista';
     }
     
+    // Si tenemos heading válido
+    if (heading !== null) {
+        sensorActive = true;
+        currentHeading = heading;
+        updateCompass(heading);
+        sensorInfoDisplay.textContent = `📱 Usando ${sensorType === 'deviceorientation-ios' ? 'iOS' : 'Android'} DeviceOrientation`;
+    }
+}
+
+// ============================================
+// ACTUALIZAR LA BRÚJULA
+// ============================================
+function updateCompass(heading) {
     // Aplicar calibración manual
     heading = (heading + calibrationOffset) % 360;
     if (heading < 0) heading += 360;
@@ -84,159 +221,12 @@ function handleOrientation(event) {
 }
 
 // ============================================
-// FUNCIÓN PARA ACTIVAR SENSORES CON TOQUE
-// ============================================
-function activateSensorsWithTouch() {
-    console.log('👆 Activando sensores por toque...');
-    statusDisplay.textContent = '🔄 Activando sensores...';
-    
-    // Crear un evento dummy para "despertar" los sensores
-    if (window.DeviceOrientationEvent) {
-        // En Android, a veces los sensores se activan con un evento de toque
-        window.removeEventListener('deviceorientation', handleOrientation);
-        window.addEventListener('deviceorientation', handleOrientation, true);
-        
-        // Intentar con un evento de movimiento también
-        if (window.DeviceMotionEvent) {
-            window.addEventListener('devicemotion', function motionHandler(e) {
-                console.log('📱 Devicemotion activado:', e.acceleration);
-                // Si recibimos datos de movimiento, los sensores están activos
-                if (e.acceleration && (e.acceleration.x !== null || e.acceleration.y !== null)) {
-                    statusDisplay.textContent = '✅ Sensores activos! Esperando orientación...';
-                    window.removeEventListener('devicemotion', motionHandler);
-                }
-            }, true);
-        }
-        
-        // Forzar una lectura solicitando permiso de nuevo (solo iOS)
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(state => {
-                    console.log('Permiso:', state);
-                    if (state === 'granted') {
-                        statusDisplay.textContent = '✅ Permiso concedido, esperando datos...';
-                    }
-                })
-                .catch(err => console.error('Error en permiso:', err));
-        }
-        
-        // Si después de 5 segundos no hay datos, intentar reconectar
-        setTimeout(() => {
-            if (!sensorActive && retryCount < maxRetries) {
-                retryCount++;
-                console.log(`🔄 Reintento ${retryCount}/${maxRetries}`);
-                statusDisplay.textContent = `🔄 Reintentando (${retryCount}/${maxRetries})...`;
-                
-                // Reiniciar el listener
-                window.removeEventListener('deviceorientation', handleOrientation);
-                window.addEventListener('deviceorientation', handleOrientation, true);
-            } else if (!sensorActive && retryCount >= maxRetries) {
-                statusDisplay.textContent = '⚠️ Activa los sensores: mueve el teléfono en forma de 8';
-                // Mostrar un mensaje de ayuda
-                showHelpMessage();
-            }
-        }, 5000);
-    }
-}
-
-// ============================================
-// MOSTRAR MENSAJE DE AYUDA
-// ============================================
-function showHelpMessage() {
-    const helpDiv = document.createElement('div');
-    helpDiv.style.cssText = `
-        background: rgba(255, 200, 0, 0.1);
-        border: 1px solid #f0c040;
-        border-radius: 10px;
-        padding: 15px;
-        margin-top: 15px;
-        font-size: 0.9rem;
-        color: #f0c040;
-    `;
-    helpDiv.innerHTML = `
-        <p><strong>📱 ¿No funciona?</strong></p>
-        <ul style="text-align:left; padding-left:20px; margin:10px 0;">
-            <li>🔒 Asegúrate de estar en <strong>HTTPS</strong></li>
-            <li>🔄 Mueve el teléfono en <strong>forma de 8</strong></li>
-            <li>📱 En Android: abre <strong>Chrome</strong> (no otras apps)</li>
-            <li>⚙️ En Android: ve a <strong>Ajustes > Apps > Chrome > Permisos</strong> y activa <strong>sensores</strong></li>
-            <li>🍎 En iOS: ve a <strong>Ajustes > Safari > Privacidad</strong> y activa <strong>Acceso a movimiento</strong></li>
-        </ul>
-    `;
-    document.querySelector('.info').after(helpDiv);
-}
-
-// ============================================
-// SOLICITAR PERMISO (para iOS y Android)
-// ============================================
-async function requestPermission() {
-    try {
-        // Verificar si el navegador soporta DeviceOrientationEvent
-        if (typeof DeviceOrientationEvent === 'undefined') {
-            statusDisplay.textContent = '❌ Tu navegador no soporta DeviceOrientation';
-            return false;
-        }
-        
-        // iOS 13+ requiere permiso explícito
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            statusDisplay.textContent = '🔐 Solicitando permiso...';
-            const permissionState = await DeviceOrientationEvent.requestPermission();
-            console.log('Permiso iOS:', permissionState);
-            
-            if (permissionState === 'granted') {
-                statusDisplay.textContent = '✅ Permiso concedido';
-                window.addEventListener('deviceorientation', handleOrientation, true);
-                
-                // Verificar si llegan datos
-                setTimeout(() => {
-                    if (!sensorActive) {
-                        statusDisplay.textContent = '⏳ Mueve el teléfono para activar el sensor';
-                        // Intentar activar con un toque virtual
-                        activateSensorsWithTouch();
-                    }
-                }, 2000);
-                
-                return true;
-            } else {
-                statusDisplay.textContent = '❌ Permiso denegado por el usuario';
-                return false;
-            }
-        } else {
-            // Android: añadir listener
-            statusDisplay.textContent = '✅ Conectando al sensor...';
-            window.addEventListener('deviceorientation', handleOrientation, true);
-            
-            // En Android, a veces es necesario un evento de toque
-            document.addEventListener('click', function firstClick() {
-                console.log('👆 Click detectado, activando sensores...');
-                document.removeEventListener('click', firstClick);
-                activateSensorsWithTouch();
-            }, { once: true });
-            
-            // También intentar activar automáticamente
-            setTimeout(() => {
-                if (!sensorActive) {
-                    activateSensorsWithTouch();
-                }
-            }, 1000);
-            
-            return true;
-        }
-    } catch (error) {
-        console.error('Error al solicitar permiso:', error);
-        statusDisplay.textContent = '❌ Error: ' + error.message;
-        return false;
-    }
-}
-
-// ============================================
 // CALIBRACIÓN MANUAL
 // ============================================
 function calibrateCompass() {
     if (isCalibrating) return;
     if (!sensorActive) {
         statusDisplay.textContent = '⚠️ Espera a que la brújula se active';
-        activateSensorsWithTouch();
         return;
     }
     
@@ -270,35 +260,10 @@ function calibrateCompass() {
             calibrateBtn.textContent = '🔄 Calibrar';
             statusDisplay.textContent = `✅ Calibrado (offset: ${Math.round(calibrationOffset)}°)`;
             
-            const fakeEvent = { alpha: currentHeading, webkitCompassHeading: currentHeading };
-            handleOrientation(fakeEvent);
+            // Actualizar inmediatamente
+            updateCompass(currentHeading);
         }
     }, 200);
-}
-
-// ============================================
-// DETECTAR SI EL DISPOSITIVO TIENE SENSORES
-// ============================================
-function checkSensorSupport() {
-    // Verificar si el navegador soporta DeviceOrientation
-    if (typeof DeviceOrientationEvent === 'undefined') {
-        statusDisplay.textContent = '❌ Tu navegador no soporta sensores de orientación';
-        return false;
-    }
-    
-    // Intentar detectar el sensor en Android
-    if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions.query({ name: 'sensors' })
-            .then(result => {
-                console.log('Permiso de sensores:', result.state);
-                if (result.state === 'denied') {
-                    statusDisplay.textContent = '❌ Permiso de sensores denegado en el sistema';
-                }
-            })
-            .catch(err => console.log('No se pudo verificar permisos:', err));
-    }
-    
-    return true;
 }
 
 // ============================================
@@ -306,52 +271,43 @@ function checkSensorSupport() {
 // ============================================
 async function init() {
     statusDisplay.textContent = '🔄 Iniciando brújula...';
-    
-    // Verificar soporte
-    if (!checkSensorSupport()) {
-        return;
-    }
+    sensorInfoDisplay.textContent = '🔍 Detectando sensores...';
     
     // Esperar un momento
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    const success = await requestPermission();
+    // Verificar si el dispositivo es iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /android/i.test(navigator.userAgent);
     
-    if (!success) {
-        statusDisplay.textContent = '❌ No se pudo iniciar la brújula';
+    console.log(`📱 Dispositivo: ${isIOS ? 'iOS' : isAndroid ? 'Android' : 'Otro'}`);
+    
+    if (isIOS) {
+        // En iOS usar DeviceOrientation
+        sensorInfoDisplay.textContent = '🍎 Detectado iOS - usando DeviceOrientation';
+        startDeviceOrientation();
+    } else if (isAndroid) {
+        // En Android intentar Magnetometer primero
+        sensorInfoDisplay.textContent = '🤖 Detectado Android - probando Magnetometer...';
+        const magnetometerStarted = startMagnetometer();
+        
+        // Si Magnetometer no se inició, probar DeviceOrientation
+        if (!magnetometerStarted) {
+            startDeviceOrientation();
+        }
+    } else {
+        // Otros dispositivos
+        sensorInfoDisplay.textContent = '💻 Dispositivo no móvil - probando DeviceOrientation...';
+        startDeviceOrientation();
     }
     
-    // Si después de 8 segundos no hay datos, mostrar ayuda
-    setTimeout(() => {
-        if (!sensorActive) {
-            statusDisplay.textContent = '⚠️ Mueve el teléfono en forma de 8 para calibrar';
-            showHelpMessage();
-        }
-    }, 8000);
-    
     console.log('🧭 Brújula Web iniciada');
-    console.log('📱 Si no funciona, toca la pantalla o mueve el teléfono');
 }
 
 // ============================================
 // EVENTOS DE LA INTERFAZ
 // ============================================
 calibrateBtn.addEventListener('click', calibrateCompass);
-
-// Tocar la pantalla activa los sensores en Android
-document.addEventListener('click', () => {
-    console.log('👆 Pantalla tocada');
-    if (!sensorActive) {
-        activateSensorsWithTouch();
-    }
-});
-
-document.addEventListener('touchstart', () => {
-    console.log('👆 Touch detectado');
-    if (!sensorActive) {
-        activateSensorsWithTouch();
-    }
-}, { passive: true });
 
 // ============================================
 // INICIAR TODO

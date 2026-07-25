@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🧪 Test Sensores - Android Fix</title>
+    <title>🧲 Test Magnetometer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -33,14 +33,14 @@
             font-weight: bold;
             font-size: 0.9rem;
         }
-        .status-success { background: rgba(76, 175, 80, 0.3); color: #4caf50; }
-        .status-error { background: rgba(255, 68, 68, 0.3); color: #ff4444; }
-        .status-warning { background: rgba(255, 170, 0, 0.3); color: #ffaa00; }
-        .status-info { background: rgba(136, 204, 255, 0.2); color: #88ccff; }
+        .success { background: rgba(76, 175, 80, 0.3); color: #4caf50; }
+        .error { background: rgba(255, 68, 68, 0.3); color: #ff4444; }
+        .warning { background: rgba(255, 170, 0, 0.3); color: #ffaa00; }
+        .info { background: rgba(136, 204, 255, 0.2); color: #88ccff; }
         
         .sensor-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 10px;
             margin: 15px 0;
         }
@@ -57,29 +57,44 @@
             letter-spacing: 1px;
         }
         .sensor-value {
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: bold;
             color: #f0c040;
             margin-top: 5px;
-            min-height: 40px;
+            min-height: 35px;
         }
         .sensor-value.active { color: #4caf50; }
         
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin: 15px 0;
+        .compass-display {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(240, 192, 64, 0.1);
+            border-radius: 15px;
+            border: 2px solid rgba(240, 192, 64, 0.3);
         }
+        .compass-display .heading {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #f0c040;
+        }
+        .compass-display .direction {
+            font-size: 1.5rem;
+            color: #88ccff;
+            margin-top: 5px;
+        }
+        
         button {
-            flex: 1;
+            width: 100%;
             background: #f0c040;
             color: #1a1a2e;
             border: none;
-            padding: 12px;
+            padding: 15px;
             border-radius: 30px;
-            font-size: 0.9rem;
+            font-size: 1rem;
             font-weight: bold;
             cursor: pointer;
+            margin: 5px 0;
         }
         button:active { transform: scale(0.95); }
         button.secondary { background: #444; color: white; }
@@ -102,53 +117,58 @@
             border-radius: 8px;
             font-size: 0.7rem;
             color: #666;
-            max-height: 100px;
+            max-height: 150px;
             overflow-y: auto;
             font-family: monospace;
         }
         .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .compatibility {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 0.85rem;
+        }
+        .compatible { background: rgba(76, 175, 80, 0.2); color: #4caf50; }
+        .incompatible { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🧪 Test de Sensores</h1>
+        <h1>🧲 Test Magnetometer</h1>
         
-        <div id="status" class="status-box status-info">🔄 Iniciando...</div>
+        <div id="status" class="status-box info">🔄 Iniciando...</div>
+        <div id="compatibility" class="compatibility">🔍 Verificando compatibilidad...</div>
+        
+        <div class="compass-display">
+            <div>🧭 Rumbo</div>
+            <div class="heading" id="heading">---°</div>
+            <div class="direction" id="direction">---</div>
+        </div>
         
         <div class="sensor-grid">
             <div class="sensor-card">
-                <div class="sensor-label">🧭 Alpha (Rumbo)</div>
-                <div id="alpha" class="sensor-value">---</div>
+                <div class="sensor-label">🧲 X</div>
+                <div id="magX" class="sensor-value">---</div>
             </div>
             <div class="sensor-card">
-                <div class="sensor-label">📐 Beta</div>
-                <div id="beta" class="sensor-value">---</div>
+                <div class="sensor-label">🧲 Y</div>
+                <div id="magY" class="sensor-value">---</div>
             </div>
             <div class="sensor-card">
-                <div class="sensor-label">📐 Gamma</div>
-                <div id="gamma" class="sensor-value">---</div>
-            </div>
-            <div class="sensor-card">
-                <div class="sensor-label">🍎 Compass (iOS)</div>
-                <div id="compass" class="sensor-value">---</div>
+                <div class="sensor-label">🧲 Z</div>
+                <div id="magZ" class="sensor-value">---</div>
             </div>
         </div>
         
-        <div id="raw-data" style="text-align:center;font-size:0.8rem;color:#666;margin:5px 0;">
-            Esperando datos...
-        </div>
-        
-        <div class="btn-group">
-            <button onclick="forceActivate()">📱 Activar Sensores</button>
-            <button onclick="window.location.reload()" class="secondary">🔄 Recargar</button>
-        </div>
+        <button onclick="startMagnetometer()">📱 Iniciar Magnetometer</button>
+        <button onclick="window.location.reload()" class="secondary">🔄 Recargar</button>
         
         <div class="help-text">
-            <strong>📱 Instrucciones para Android:</strong><br>
-            1. Toca <strong>"Activar Sensores"</strong><br>
-            2. Mueve el teléfono en <strong>forma de 8</strong><br>
-            3. Si no funciona, abre <strong>Chrome</strong> (no otra app)<br>
-            4. Ve a <strong>Ajustes > Apps > Chrome > Permisos</strong> y activa <strong>"Sensores"</strong>
+            <strong>📱 API Magnetometer (Chrome 90+ en Android)</strong><br>
+            1. Toca <strong>"Iniciar Magnetometer"</strong><br>
+            2. Mueve el teléfono para ver los valores cambiar<br>
+            3. El rumbo se calcula desde los valores magnéticos<br>
+            4. En Android: Ajustes > Apps > Chrome > Permisos > <strong>Sensores</strong>
         </div>
         
         <div id="log" class="log-area"></div>
@@ -156,26 +176,24 @@
 
     <script>
         // Variables
-        let sensorActive = false;
-        let retryCount = 0;
-        let eventCount = 0;
+        let magnetometer = null;
+        let isRunning = false;
         const logElement = document.getElementById('log');
         const statusElement = document.getElementById('status');
-        const rawDataElement = document.getElementById('raw-data');
+        const compatibilityElement = document.getElementById('compatibility');
         
-        // Elementos de valores
-        const alphaEl = document.getElementById('alpha');
-        const betaEl = document.getElementById('beta');
-        const gammaEl = document.getElementById('gamma');
-        const compassEl = document.getElementById('compass');
+        // Elementos
+        const headingEl = document.getElementById('heading');
+        const directionEl = document.getElementById('direction');
+        const magXEl = document.getElementById('magX');
+        const magYEl = document.getElementById('magY');
+        const magZEl = document.getElementById('magZ');
 
-        // ============================================
-        // FUNCIONES DE LOG
-        // ============================================
         function addLog(message) {
             const entry = document.createElement('div');
             entry.className = 'log-entry';
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
             logElement.appendChild(entry);
             logElement.scrollTop = logElement.scrollHeight;
             console.log(message);
@@ -183,235 +201,136 @@
 
         function setStatus(message, type = 'info') {
             statusElement.textContent = message;
-            statusElement.className = `status-box status-${type}`;
+            statusElement.className = `status-box ${type}`;
         }
 
-        // ============================================
-        // MANEJADOR DE ORIENTACIÓN - VERSIÓN ANDROID
-        // ============================================
-        function handleOrientation(event) {
-            eventCount++;
-            
-            // Obtener valores con manejo de null/undefined
-            let alpha = event.alpha;
-            let beta = event.beta;
-            let gamma = event.gamma;
-            let compass = event.webkitCompassHeading;
-            
-            // Mostrar datos crudos
-            rawDataElement.textContent = `📊 Evento #${eventCount} | Alpha: ${alpha} | Beta: ${beta} | Gamma: ${gamma}`;
-            
-            // CONVERTIR A NÚMEROS Y MANEJAR NaN
-            const alphaNum = parseFloat(alpha);
-            const betaNum = parseFloat(beta);
-            const gammaNum = parseFloat(gamma);
-            const compassNum = parseFloat(compass);
-            
-            // Verificar si son números válidos
-            const isValidAlpha = !isNaN(alphaNum) && alpha !== null && alpha !== undefined;
-            const isValidBeta = !isNaN(betaNum) && beta !== null && beta !== undefined;
-            const isValidGamma = !isNaN(gammaNum) && gamma !== null && gamma !== undefined;
-            const isValidCompass = !isNaN(compassNum) && compass !== undefined;
-            
-            // Actualizar UI
-            if (isValidAlpha) {
-                alphaEl.textContent = Math.round(alphaNum) + '°';
-                alphaEl.className = 'sensor-value active';
-            } else {
-                alphaEl.textContent = '---';
-                alphaEl.className = 'sensor-value';
+        function getDirection(degrees) {
+            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            const index = Math.round(degrees / 45) % 8;
+            return directions[index];
+        }
+
+        function calculateHeading(x, y) {
+            let heading = Math.atan2(y, x) * (180 / Math.PI);
+            heading = (heading + 360) % 360;
+            heading = (heading + 90) % 360;
+            return heading;
+        }
+
+        function startMagnetometer() {
+            if (!window.Magnetometer) {
+                setStatus('❌ Magnetometer API no disponible', 'error');
+                addLog('❌ Magnetometer API no disponible');
+                compatibilityElement.textContent = '❌ No compatible - Necesitas Chrome 90+ en Android';
+                compatibilityElement.className = 'compatibility incompatible';
+                return;
             }
             
-            if (isValidBeta) {
-                betaEl.textContent = Math.round(betaNum) + '°';
-                betaEl.className = 'sensor-value active';
-            } else {
-                betaEl.textContent = '---';
-                betaEl.className = 'sensor-value';
+            if (isRunning) {
+                addLog('⏹️ Deteniendo sensor...');
+                if (magnetometer) {
+                    magnetometer.stop();
+                    magnetometer = null;
+                }
+                isRunning = false;
+                setStatus('⏹️ Sensor detenido', 'info');
+                return;
             }
             
-            if (isValidGamma) {
-                gammaEl.textContent = Math.round(gammaNum) + '°';
-                gammaEl.className = 'sensor-value active';
-            } else {
-                gammaEl.textContent = '---';
-                gammaEl.className = 'sensor-value';
-            }
-            
-            if (isValidCompass) {
-                compassEl.textContent = Math.round(compassNum) + '°';
-                compassEl.className = 'sensor-value active';
-            } else {
-                compassEl.textContent = '---';
-                compassEl.className = 'sensor-value';
-            }
-            
-            // Si AL MENOS UNO es válido, los sensores funcionan
-            if (isValidAlpha || isValidBeta || isValidGamma || isValidCompass) {
-                sensorActive = true;
-                setStatus('✅ ¡Sensores funcionando!', 'success');
-                addLog('✅ Datos válidos recibidos');
+            try {
+                setStatus('🔄 Iniciando Magnetometer...', 'info');
+                addLog('📱 Creando Magnetometer...');
                 
-                // Si alpha es 0 pero el resto tiene datos, funciona
-                if (isValidAlpha && Math.round(alphaNum) === 0 && (isValidBeta || isValidGamma)) {
-                    setStatus('⚠️ Sensor activo - Mueve en 8 para calibrar', 'warning');
-                    addLog('⚠️ Alpha en 0 - necesita calibración');
-                }
-            } else {
-                // Si no hay datos válidos pero recibimos evento
-                if (eventCount > 1) {
-                    setStatus('⚠️ Recibiendo eventos sin datos válidos', 'warning');
-                    addLog('⚠️ Evento sin datos válidos');
-                }
-            }
-        }
-
-        // ============================================
-        // FUNCIÓN PARA FORZAR ACTIVACIÓN
-        // ============================================
-        function forceActivate() {
-            addLog('📱 Activando sensores...');
-            setStatus('🔄 Activando sensores...', 'info');
-            
-            // 1. Remover y volver a añadir el listener
-            window.removeEventListener('deviceorientation', handleOrientation);
-            window.addEventListener('deviceorientation', handleOrientation, true);
-            
-            // 2. Intentar con devicemotion también (a veces funciona mejor)
-            window.addEventListener('devicemotion', function motionHandler(e) {
-                const acc = e.acceleration;
-                if (acc && (acc.x !== null || acc.y !== null || acc.z !== null)) {
-                    addLog('📱 Movimiento detectado: ' + JSON.stringify(acc));
-                    setStatus('📱 Movimiento detectado', 'info');
-                }
-            }, true);
-            
-            // 3. En Android, a veces es necesario un permiso extra
-            if (navigator.permissions && navigator.permissions.query) {
-                navigator.permissions.query({ name: 'sensors' })
-                    .then(result => {
-                        addLog('🔐 Permiso sensores: ' + result.state);
-                        if (result.state === 'prompt') {
-                            // Esto puede activar el diálogo de permisos
-                            navigator.permissions.request({ name: 'sensors' }).catch(() => {});
-                        }
-                    })
-                    .catch(err => addLog('❌ Error verificando permisos: ' + err.message));
-            }
-            
-            // 4. Crear un evento dummy para "despertar" los sensores
-            try {
-                const dummyEvent = new Event('deviceorientation');
-                window.dispatchEvent(dummyEvent);
-                addLog('📤 Evento dummy enviado');
-            } catch (e) {
-                addLog('⚠️ No se pudo crear evento dummy');
-            }
-            
-            // 5. Si no hay datos después de 5 segundos, sugerir calibración
-            setTimeout(() => {
-                if (!sensorActive) {
-                    setStatus('🔄 Mueve el teléfono en forma de 8', 'warning');
-                    addLog('⚠️ Mueve el teléfono en forma de 8');
-                }
-            }, 3000);
-        }
-
-        // ============================================
-        // SOLICITAR PERMISO
-        // ============================================
-        async function requestPermission() {
-            try {
-                // Android: verificar si existe el sensor
-                if (window.DeviceOrientationEvent) {
-                    setStatus('🔄 Conectando al sensor...', 'info');
-                    addLog('🔍 DeviceOrientationEvent soportado');
+                magnetometer = new Magnetometer({ frequency: 60 });
+                
+                magnetometer.addEventListener('reading', () => {
+                    const x = magnetometer.x;
+                    const y = magnetometer.y;
+                    const z = magnetometer.z;
                     
-                    // iOS
-                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                        setStatus('🔐 Solicitando permiso...', 'info');
-                        const state = await DeviceOrientationEvent.requestPermission();
-                        addLog('🔐 Permiso iOS: ' + state);
-                        if (state === 'granted') {
-                            setStatus('✅ Permiso concedido', 'success');
-                            window.addEventListener('deviceorientation', handleOrientation, true);
-                        } else {
-                            setStatus('❌ Permiso denegado', 'error');
-                            return;
-                        }
-                    } else {
-                        // Android - añadir listener directamente
-                        addLog('📱 Android - añadiendo listener');
-                        window.addEventListener('deviceorientation', handleOrientation, true);
-                        setStatus('👂 Escuchando sensores...', 'info');
+                    magXEl.textContent = x !== null ? x.toFixed(2) : '---';
+                    magYEl.textContent = y !== null ? y.toFixed(2) : '---';
+                    magZEl.textContent = z !== null ? z.toFixed(2) : '---';
+                    
+                    if (x !== null) magXEl.className = 'sensor-value active';
+                    if (y !== null) magYEl.className = 'sensor-value active';
+                    if (z !== null) magZEl.className = 'sensor-value active';
+                    
+                    if (x !== null && y !== null && !isNaN(x) && !isNaN(y)) {
+                        const heading = calculateHeading(x, y);
+                        headingEl.textContent = Math.round(heading) + '°';
+                        headingEl.className = 'heading';
+                        
+                        const direction = getDirection(heading);
+                        directionEl.textContent = direction;
+                        
+                        setStatus('✅ Magnetometer funcionando!', 'success');
+                        addLog(`🧭 Rumbo: ${Math.round(heading)}° (${direction})`);
                     }
-                    
-                    // Intentar activar automáticamente
-                    setTimeout(forceActivate, 500);
-                    
-                } else {
-                    setStatus('❌ Tu navegador no soporta DeviceOrientation', 'error');
-                    addLog('❌ DeviceOrientationEvent no disponible');
-                }
+                });
+                
+                magnetometer.addEventListener('error', (event) => {
+                    const error = event.error || event;
+                    setStatus('❌ Error: ' + (error.message || 'Desconocido'), 'error');
+                    addLog('❌ Error en sensor: ' + JSON.stringify(error));
+                });
+                
+                magnetometer.start();
+                isRunning = true;
+                setStatus('✅ Magnetometer iniciado', 'success');
+                addLog('✅ Magnetometer iniciado correctamente');
+                compatibilityElement.textContent = '✅ Compatible - Magnetometer API disponible';
+                compatibilityElement.className = 'compatibility compatible';
+                
             } catch (error) {
                 setStatus('❌ Error: ' + error.message, 'error');
                 addLog('❌ Error: ' + error.message);
+                isRunning = false;
             }
         }
 
-        // ============================================
-        // INICIAR
-        // ============================================
-        async function init() {
-            addLog('🚀 Iniciando test de sensores...');
-            
-            // Verificar si es Android
+        function checkCompatibility() {
             const isAndroid = /android/i.test(navigator.userAgent);
             const isChrome = /chrome/i.test(navigator.userAgent);
-            addLog(`📱 Dispositivo: ${isAndroid ? 'Android' : 'Otro'} | Chrome: ${isChrome}`);
             
-            if (isAndroid && !isChrome) {
-                addLog('⚠️ Recomendamos usar Chrome en Android');
-                setStatus('⚠️ Usa Chrome para mejor compatibilidad', 'warning');
+            let msg = `📱 ${isAndroid ? 'Android' : 'Otro OS'} | ${isChrome ? 'Chrome' : 'Otro navegador'}`;
+            
+            if (window.Magnetometer) {
+                msg += ' | ✅ Magnetometer disponible';
+                compatibilityElement.textContent = msg;
+                compatibilityElement.className = 'compatibility compatible';
+                addLog('✅ Magnetometer API disponible');
+            } else {
+                msg += ' | ❌ Magnetometer NO disponible';
+                compatibilityElement.textContent = msg + ' - Usa Chrome 90+ en Android';
+                compatibilityElement.className = 'compatibility incompatible';
+                addLog('❌ Magnetometer API no disponible');
             }
-            
-            await requestPermission();
-            
-            // Si después de 10 segundos no hay datos
-            setTimeout(() => {
-                if (!sensorActive) {
-                    setStatus('⚠️ No se detectan sensores. Toca "Activar Sensores"', 'warning');
-                    addLog('⚠️ No se detectaron sensores automáticamente');
-                }
-            }, 8000);
         }
 
-        // ============================================
-        // EVENTOS
-        // ============================================
-        // Tocar la pantalla activa en Android
+        function init() {
+            addLog('🚀 Iniciando test Magnetometer...');
+            setStatus('🔄 Verificando compatibilidad...', 'info');
+            checkCompatibility();
+            
+            setTimeout(() => {
+                if (window.Magnetometer) {
+                    addLog('📱 Iniciando automáticamente...');
+                    startMagnetometer();
+                } else {
+                    setStatus('⚠️ Toca "Iniciar Magnetometer" para probar', 'warning');
+                }
+            }, 1500);
+        }
+
         document.addEventListener('click', () => {
-            addLog('👆 Click detectado');
-            if (!sensorActive) {
-                forceActivate();
+            if (!isRunning && window.Magnetometer) {
+                addLog('👆 Click detectado - iniciando...');
+                startMagnetometer();
             }
         }, { once: false });
-        
-        document.addEventListener('touchstart', () => {
-            addLog('👆 Touch detectado');
-            if (!sensorActive) {
-                forceActivate();
-            }
-        }, { passive: true });
 
-        // ============================================
-        // INICIAR
-        // ============================================
         init();
-        
-        // Log de ayuda
-        addLog('💡 Si no funciona: toca "Activar Sensores" o la pantalla');
-        addLog('💡 En Android: Ajustes > Apps > Chrome > Permisos > Sensores');
     </script>
 </body>
 </html>
