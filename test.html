@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🧪 Test Final - AbsoluteOrientation</title>
+    <title>🧪 Test Geolocalización</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -56,25 +56,25 @@
             color: #88ccff;
         }
         
-        .sensor-grid {
+        .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin: 15px 0;
         }
-        .sensor-card {
+        .info-card {
             background: rgba(255,255,255,0.05);
             padding: 12px;
             border-radius: 10px;
             text-align: center;
         }
-        .sensor-label {
+        .info-label {
             font-size: 0.7rem;
             color: #888;
             text-transform: uppercase;
         }
-        .sensor-value {
-            font-size: 1.2rem;
+        .info-value {
+            font-size: 1rem;
             font-weight: bold;
             color: #f0c040;
             margin-top: 3px;
@@ -107,11 +107,22 @@
             font-family: monospace;
         }
         .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .help-text {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(255,200,0,0.08);
+            border: 1px solid rgba(255,200,0,0.2);
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: #aaa;
+            line-height: 1.6;
+        }
+        .help-text strong { color: #f0c040; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🧪 Test Sensores</h1>
+        <h1>📍 Test Geolocalización</h1>
         
         <div id="status" class="status-box info">🔄 Iniciando...</div>
         
@@ -121,19 +132,27 @@
             <div class="direction" id="direction">---</div>
         </div>
         
-        <div class="sensor-grid">
-            <div class="sensor-card">
-                <div class="sensor-label">Sensor</div>
-                <div class="sensor-value" id="sensorType" style="color:#88ccff;font-size:0.8rem;">---</div>
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-label">Velocidad</div>
+                <div class="info-value" id="speed">---</div>
             </div>
-            <div class="sensor-card">
-                <div class="sensor-label">Estado</div>
-                <div class="sensor-value" id="sensorStatus" style="color:#88ccff;font-size:0.8rem;">---</div>
+            <div class="info-card">
+                <div class="info-label">Precisión</div>
+                <div class="info-value" id="accuracy">---</div>
             </div>
         </div>
         
-        <button onclick="testAll()">📱 Probar Todos los Sensores</button>
+        <button onclick="startTest()">📍 Iniciar Geolocalización</button>
         <button onclick="window.location.reload()" class="secondary">🔄 Recargar</button>
+        
+        <div class="help-text">
+            <strong>📍 Esta brújula usa la API de Geolocalización</strong><br>
+            1. El GPS debe estar activo<br>
+            2. El teléfono debe estar en movimiento (o recién movido)<br>
+            3. El rumbo se calcula a partir de la dirección de movimiento<br>
+            4. <strong>No usa sensores magnéticos</strong> - funciona siempre que el GPS funcione
+        </div>
         
         <div id="log" class="log-area"></div>
     </div>
@@ -143,10 +162,11 @@
         let statusElement = document.getElementById('status');
         let headingEl = document.getElementById('heading');
         let directionEl = document.getElementById('direction');
-        let sensorTypeEl = document.getElementById('sensorType');
-        let sensorStatusEl = document.getElementById('sensorStatus');
+        let speedEl = document.getElementById('speed');
+        let accuracyEl = document.getElementById('accuracy');
         
-        let testRunning = false;
+        let watchId = null;
+        let testActive = false;
         let heading = 0;
         
         function addLog(msg) {
@@ -168,284 +188,102 @@
             return dirs[Math.round(deg / 45) % 8];
         }
         
-        function updateDisplay(deg) {
+        function updateDisplay(deg, speed, acc) {
             heading = deg;
             headingEl.textContent = Math.round(deg) + '°';
             directionEl.textContent = getDirection(deg);
-        }
-        
-        function quaternionToHeading(q) {
-            const x = q[0], y = q[1], z = q[2], w = q[3];
-            const siny = 2 * (w * z + x * y);
-            const cosy = 1 - 2 * (y * y + z * z);
-            let heading = Math.atan2(siny, cosy) * (180 / Math.PI);
-            heading = (heading + 360) % 360;
-            return heading;
-        }
-        
-        // ============================================
-        // TEST: ABSOLUTE ORIENTATION SENSOR
-        // ============================================
-        function testAbsoluteOrientation() {
-            return new Promise((resolve) => {
-                if (!window.AbsoluteOrientationSensor) {
-                    addLog('❌ AbsoluteOrientationSensor no disponible');
-                    resolve(false);
-                    return;
-                }
-                
-                addLog('📱 Probando AbsoluteOrientationSensor...');
-                sensorTypeEl.textContent = 'AbsoluteOrientation';
-                sensorStatusEl.textContent = '🔄 Conectando...';
-                
-                try {
-                    const sensor = new AbsoluteOrientationSensor({ frequency: 60 });
-                    
-                    let resolved = false;
-                    
-                    sensor.addEventListener('reading', () => {
-                        if (!resolved) {
-                            resolved = true;
-                            let deg = null;
-                            
-                            if (sensor.quaternion) {
-                                deg = quaternionToHeading(sensor.quaternion);
-                            } else if (sensor.rotationMatrix) {
-                                const m = sensor.rotationMatrix;
-                                deg = Math.atan2(m[4], m[0]) * (180 / Math.PI);
-                                deg = (deg + 360) % 360;
-                            }
-                            
-                            if (deg !== null && !isNaN(deg)) {
-                                addLog(`✅ AbsoluteOrientation: ${Math.round(deg)}°`);
-                                setStatus('✅ ¡Funciona!', 'success');
-                                updateDisplay(deg);
-                                sensorTypeEl.textContent = 'AbsoluteOrientation ✅';
-                                sensorStatusEl.textContent = 'Funcionando';
-                                sensor.stop();
-                                resolve(true);
-                            }
-                        }
-                    });
-                    
-                    sensor.addEventListener('error', (e) => {
-                        if (!resolved) {
-                            resolved = true;
-                            addLog('❌ Error: ' + (e.error?.message || 'desconocido'));
-                            sensorTypeEl.textContent = 'AbsoluteOrientation ❌';
-                            sensorStatusEl.textContent = 'Error';
-                            resolve(false);
-                        }
-                    });
-                    
-                    sensor.start();
-                    
-                    setTimeout(() => {
-                        if (!resolved) {
-                            resolved = true;
-                            addLog('⏳ Timeout - sin datos');
-                            sensorTypeEl.textContent = 'AbsoluteOrientation ⏳';
-                            sensorStatusEl.textContent = 'Timeout';
-                            sensor.stop();
-                            resolve(false);
-                        }
-                    }, 4000);
-                    
-                } catch (e) {
-                    addLog('❌ Error: ' + e.message);
-                    resolve(false);
-                }
-            });
-        }
-        
-        // ============================================
-        // TEST: MAGNETOMETER
-        // ============================================
-        function testMagnetometer() {
-            return new Promise((resolve) => {
-                if (!window.Magnetometer) {
-                    addLog('❌ Magnetometer no disponible');
-                    resolve(false);
-                    return;
-                }
-                
-                addLog('🧲 Probando Magnetometer...');
-                sensorTypeEl.textContent = 'Magnetometer';
-                sensorStatusEl.textContent = '🔄 Conectando...';
-                
-                try {
-                    const sensor = new Magnetometer({ frequency: 60 });
-                    let resolved = false;
-                    
-                    sensor.addEventListener('reading', () => {
-                        if (!resolved) {
-                            resolved = true;
-                            const x = sensor.x, y = sensor.y;
-                            
-                            if (x !== null && y !== null && !isNaN(x) && !isNaN(y)) {
-                                let deg = Math.atan2(y, x) * (180 / Math.PI);
-                                deg = (deg + 360) % 360;
-                                deg = (deg + 90) % 360;
-                                
-                                addLog(`✅ Magnetometer: ${Math.round(deg)}°`);
-                                setStatus('✅ ¡Funciona!', 'success');
-                                updateDisplay(deg);
-                                sensorTypeEl.textContent = 'Magnetometer ✅';
-                                sensorStatusEl.textContent = 'Funcionando';
-                                sensor.stop();
-                                resolve(true);
-                            }
-                        }
-                    });
-                    
-                    sensor.addEventListener('error', (e) => {
-                        if (!resolved) {
-                            resolved = true;
-                            addLog('❌ Error Magnetometer');
-                            sensorTypeEl.textContent = 'Magnetometer ❌';
-                            sensorStatusEl.textContent = 'Error';
-                            resolve(false);
-                        }
-                    });
-                    
-                    sensor.start();
-                    
-                    setTimeout(() => {
-                        if (!resolved) {
-                            resolved = true;
-                            addLog('⏳ Timeout Magnetometer');
-                            sensorTypeEl.textContent = 'Magnetometer ⏳';
-                            sensorStatusEl.textContent = 'Timeout';
-                            sensor.stop();
-                            resolve(false);
-                        }
-                    }, 4000);
-                    
-                } catch (e) {
-                    addLog('❌ Error: ' + e.message);
-                    resolve(false);
-                }
-            });
-        }
-        
-        // ============================================
-        // TEST: DEVICE ORIENTATION
-        // ============================================
-        function testDeviceOrientation() {
-            return new Promise((resolve) => {
-                if (typeof DeviceOrientationEvent === 'undefined') {
-                    addLog('❌ DeviceOrientation no disponible');
-                    resolve(false);
-                    return;
-                }
-                
-                addLog('📱 Probando DeviceOrientation...');
-                sensorTypeEl.textContent = 'DeviceOrientation';
-                sensorStatusEl.textContent = '🔄 Conectando...';
-                
-                let resolved = false;
-                let handler = null;
-                
-                const checkEvent = (e) => {
-                    let deg = null;
-                    
-                    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
-                        deg = e.webkitCompassHeading;
-                    } else if (e.alpha !== undefined && e.alpha !== null && !isNaN(e.alpha)) {
-                        deg = e.alpha;
-                    }
-                    
-                    if (deg !== null && !isNaN(deg)) {
-                        if (!resolved) {
-                            resolved = true;
-                            addLog(`✅ DeviceOrientation: ${Math.round(deg)}°`);
-                            setStatus('✅ ¡Funciona!', 'success');
-                            updateDisplay(deg);
-                            sensorTypeEl.textContent = 'DeviceOrientation ✅';
-                            sensorStatusEl.textContent = 'Funcionando';
-                            window.removeEventListener('deviceorientation', handler);
-                            resolve(true);
-                        }
-                    }
-                };
-                
-                handler = checkEvent;
-                
-                // iOS necesita permiso
-                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(state => {
-                            if (state === 'granted') {
-                                window.addEventListener('deviceorientation', handler, true);
-                            } else {
-                                resolved = true;
-                                addLog('❌ Permiso denegado');
-                                sensorTypeEl.textContent = 'DeviceOrientation ❌';
-                                sensorStatusEl.textContent = 'Permiso denegado';
-                                resolve(false);
-                            }
-                        });
-                } else {
-                    window.addEventListener('deviceorientation', handler, true);
-                }
-                
-                setTimeout(() => {
-                    if (!resolved) {
-                        resolved = true;
-                        addLog('⏳ Timeout DeviceOrientation');
-                        sensorTypeEl.textContent = 'DeviceOrientation ⏳';
-                        sensorStatusEl.textContent = 'Timeout';
-                        window.removeEventListener('deviceorientation', handler);
-                        resolve(false);
-                    }
-                }, 4000);
-            });
-        }
-        
-        // ============================================
-        // PROBAR TODOS
-        // ============================================
-        async function testAll() {
-            if (testRunning) return;
-            testRunning = true;
             
-            addLog('🚀 Iniciando pruebas...');
-            setStatus('🔄 Probando sensores...', 'info');
-            
-            // Reset
-            headingEl.textContent = '---°';
-            directionEl.textContent = '---';
-            
-            // Probar en orden
-            const tests = [
-                { name: 'AbsoluteOrientation', fn: testAbsoluteOrientation },
-                { name: 'Magnetometer', fn: testMagnetometer },
-                { name: 'DeviceOrientation', fn: testDeviceOrientation }
-            ];
-            
-            for (const test of tests) {
-                addLog(`🔍 Probando ${test.name}...`);
-                const result = await test.fn();
-                if (result) {
-                    addLog(`✅ ${test.name} funciona!`);
-                    testRunning = false;
-                    return;
+            if (speed !== undefined) {
+                speedEl.textContent = (speed * 3.6).toFixed(1) + ' km/h';
+            }
+            if (acc !== undefined) {
+                accuracyEl.textContent = acc.toFixed(1) + ' m';
+            }
+        }
+        
+        function startTest() {
+            if (testActive) {
+                if (watchId !== null) {
+                    navigator.geolocation.clearWatch(watchId);
+                    watchId = null;
                 }
-                addLog(`❌ ${test.name} no funciona`);
+                testActive = false;
+                setStatus('⏹️ Detenido', 'info');
+                addLog('⏹️ Detenido por el usuario');
+                return;
             }
             
-            addLog('❌ Ningún sensor funciona');
-            setStatus('❌ No se detectaron sensores', 'error');
-            sensorTypeEl.textContent = '❌ Ninguno';
-            sensorStatusEl.textContent = 'No disponible';
-            testRunning = false;
+            if (!navigator.geolocation) {
+                setStatus('❌ Geolocalización no soportada', 'error');
+                addLog('❌ Geolocalización no soportada');
+                return;
+            }
+            
+            testActive = true;
+            setStatus('🔄 Solicitando ubicación...', 'info');
+            addLog('📍 Iniciando geolocalización...');
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 8000,
+                maximumAge: 0
+            };
+            
+            try {
+                watchId = navigator.geolocation.watchPosition(
+                    function(position) {
+                        const heading = position.coords.heading;
+                        const speed = position.coords.speed;
+                        const accuracy = position.coords.accuracy;
+                        const altitude = position.coords.altitude;
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        addLog(`📍 Posición: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+                        
+                        if (heading === null || heading === undefined) {
+                            setStatus('📱 Mueve el teléfono para obtener rumbo', 'warning');
+                            addLog('⚠️ Heading es null - el teléfono debe moverse');
+                            headingEl.textContent = '---°';
+                            directionEl.textContent = '---';
+                            speedEl.textContent = (speed !== null ? (speed * 3.6).toFixed(1) : '0') + ' km/h';
+                            accuracyEl.textContent = accuracy.toFixed(1) + ' m';
+                            return;
+                        }
+                        
+                        if (!isNaN(heading) && heading >= 0 && heading <= 360) {
+                            setStatus('✅ ¡Geolocalización funcionando!', 'success');
+                            addLog(`✅ Heading: ${Math.round(heading)}°`);
+                            updateDisplay(heading, speed, accuracy);
+                        }
+                    },
+                    function(error) {
+                        console.error('Error:', error);
+                        if (error.code === 1) {
+                            setStatus('❌ Permiso denegado. Acepta en el navegador.', 'error');
+                            addLog('❌ Permiso denegado');
+                        } else if (error.code === 3) {
+                            setStatus('⏳ Timeout - GPS lento', 'warning');
+                            addLog('⏳ Timeout de GPS');
+                        } else {
+                            setStatus('❌ Error: ' + error.message, 'error');
+                            addLog('❌ ' + error.message);
+                        }
+                    },
+                    options
+                );
+                addLog('✅ Geolocalización iniciada');
+                
+            } catch (error) {
+                setStatus('❌ Error: ' + error.message, 'error');
+                addLog('❌ ' + error.message);
+                testActive = false;
+            }
         }
         
-        // ============================================
-        // INICIAR AUTOMÁTICAMENTE
-        // ============================================
-        addLog('🚀 Iniciando test automático...');
-        setTimeout(testAll, 1000);
+        // Auto-iniciar
+        addLog('🚀 Iniciando test de geolocalización...');
+        setTimeout(startTest, 1000);
     </script>
 </body>
 </html>

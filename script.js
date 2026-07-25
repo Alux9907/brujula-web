@@ -1,6 +1,6 @@
 // ============================================
-// BRÚJULA WEB - VERSIÓN FINAL
-// Usa AbsoluteOrientationSensor + fallbacks
+// BRÚJULA WEB - VERSIÓN CON GEOLOCALIZACIÓN
+// Usa la API de Geolocalización que SIEMPRE funciona
 // ============================================
 
 // Variables globales
@@ -8,9 +8,7 @@ let currentHeading = 0;
 let isCalibrating = false;
 let calibrationOffset = 0;
 let sensorActive = false;
-let sensorType = 'ninguno';
-let sensor = null;
-let useFallback = false;
+let watchId = null;
 
 // Elementos del DOM
 const needle = document.getElementById('needle');
@@ -20,218 +18,96 @@ const sensorInfoDisplay = document.getElementById('sensor-info');
 const calibrateBtn = document.getElementById('calibrate-btn');
 
 // ============================================
-// QUATERNION A GRADOS (heading)
+// INICIAR CON GEOLOCALIZACIÓN
 // ============================================
-function quaternionToHeading(q) {
-    // Convertir quaternion a ángulo de heading (yaw)
-    // q = [x, y, z, w] (w es el escalar)
-    const x = q[0];
-    const y = q[1];
-    const z = q[2];
-    const w = q[3];
-    
-    // Calcular yaw (heading) desde el quaternion
-    // Fórmula: yaw = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z))
-    const siny = 2 * (w * z + x * y);
-    const cosy = 1 - 2 * (y * y + z * z);
-    let heading = Math.atan2(siny, cosy) * (180 / Math.PI);
-    
-    // Normalizar a 0-360
-    heading = (heading + 360) % 360;
-    return heading;
-}
-
-// ============================================
-// ROTATION MATRIX A GRADOS
-// ============================================
-function matrixToHeading(matrix) {
-    // Extraer heading de una matriz de rotación 4x4
-    // Usando la convención: heading = atan2(m[1][0], m[0][0])
-    // m[0][0] = matrix[0], m[1][0] = matrix[4], m[0][1] = matrix[1]
-    let heading = Math.atan2(matrix[4], matrix[0]) * (180 / Math.PI);
-    heading = (heading + 360) % 360;
-    return heading;
-}
-
-// ============================================
-// INICIAR ABSOLUTE ORIENTATION SENSOR
-// ============================================
-function startAbsoluteOrientation() {
-    try {
-        // Verificar si la API está disponible
-        if (!window.AbsoluteOrientationSensor) {
-            console.warn('AbsoluteOrientationSensor no disponible');
-            sensorInfoDisplay.textContent = '⚠️ AbsoluteOrientationSensor no disponible';
-            return false;
-        }
-        
-        sensorInfoDisplay.textContent = '🔍 Iniciando AbsoluteOrientationSensor...';
-        statusDisplay.textContent = '🔄 Conectando...';
-        
-        // Crear el sensor con frecuencia alta
-        sensor = new AbsoluteOrientationSensor({
-            frequency: 60,
-            referenceFrame: 'device'
-        });
-        
-        // Evento de lectura
-        sensor.addEventListener('reading', () => {
-            let heading = null;
-            
-            // Intentar obtener el quaternion
-            if (sensor.quaternion) {
-                const q = sensor.quaternion;
-                heading = quaternionToHeading(q);
-                sensorType = 'absolute-quaternion';
-                console.log('🧭 Quaternion heading:', heading);
-            }
-            // Fallback: usar matriz de rotación
-            else if (sensor.rotationMatrix) {
-                heading = matrixToHeading(sensor.rotationMatrix);
-                sensorType = 'absolute-matrix';
-                console.log('🧭 Matrix heading:', heading);
-            }
-            
-            if (heading !== null && !isNaN(heading)) {
-                sensorActive = true;
-                currentHeading = heading;
-                updateCompass(heading);
-                statusDisplay.textContent = '✅ Brújula lista';
-                sensorInfoDisplay.textContent = '🎯 Usando AbsoluteOrientationSensor';
-            }
-        });
-        
-        // Evento de error
-        sensor.addEventListener('error', (event) => {
-            const error = event.error || event;
-            console.error('Sensor error:', error);
-            sensorInfoDisplay.textContent = '⚠️ Error: ' + (error.message || 'desconocido');
-            
-            // Si falla, intentar con el fallback
-            if (!sensorActive && !useFallback) {
-                useFallback = true;
-                sensorInfoDisplay.textContent = '🔄 Fallback a DeviceOrientation...';
-                startDeviceOrientation();
-            }
-        });
-        
-        // Iniciar el sensor
-        sensor.start();
-        
-        // Timeout: si no hay datos en 3 segundos, probar fallback
-        setTimeout(() => {
-            if (!sensorActive && !useFallback) {
-                useFallback = true;
-                sensorInfoDisplay.textContent = '⏳ Sin datos, probando DeviceOrientation...';
-                startDeviceOrientation();
-            }
-        }, 3000);
-        
-        return true;
-        
-    } catch (error) {
-        console.error('Error iniciando AbsoluteOrientationSensor:', error);
-        sensorInfoDisplay.textContent = '⚠️ Error en AbsoluteOrientationSensor';
-        
-        if (!useFallback) {
-            useFallback = true;
-            startDeviceOrientation();
-        }
+function startGeolocation() {
+    // Verificar si el navegador soporta geolocalización
+    if (!navigator.geolocation) {
+        statusDisplay.textContent = '❌ Tu navegador no soporta Geolocalización';
+        sensorInfoDisplay.textContent = '❌ Geolocalización no disponible';
         return false;
     }
-}
-
-// ============================================
-// FALLBACK: DEVICE ORIENTATION
-// ============================================
-function startDeviceOrientation() {
+    
+    statusDisplay.textContent = '🔄 Solicitando ubicación...';
+    sensorInfoDisplay.textContent = '📍 Usando Geolocalización (SIEMPRE funciona)';
+    
+    // Opciones: alta precisión para obtener el rumbo
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+    };
+    
     try {
-        if (typeof DeviceOrientationEvent === 'undefined') {
-            statusDisplay.textContent = '❌ No hay sensores disponibles';
-            sensorInfoDisplay.textContent = '❌ Tu dispositivo no soporta sensores';
-            return false;
-        }
-        
-        sensorInfoDisplay.textContent = '📱 Usando DeviceOrientation (fallback)';
-        
-        // iOS 13+ requiere permiso
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(state => {
-                    console.log('Permiso iOS:', state);
-                    if (state === 'granted') {
-                        window.addEventListener('deviceorientation', handleDeviceOrientation, true);
-                        statusDisplay.textContent = '✅ Permiso concedido';
-                    } else {
-                        statusDisplay.textContent = '❌ Permiso denegado';
-                        sensorInfoDisplay.textContent = '❌ Acepta los permisos en Ajustes';
-                    }
-                })
-                .catch(err => {
-                    console.error('Error en permiso:', err);
-                    statusDisplay.textContent = '❌ Error de permiso';
-                });
-        } else {
-            // Android y otros
-            window.addEventListener('deviceorientation', handleDeviceOrientation, true);
-            statusDisplay.textContent = '✅ Escuchando DeviceOrientation...';
-            
-            // Timeout para verificar si hay datos
-            setTimeout(() => {
-                if (!sensorActive) {
-                    statusDisplay.textContent = '🔄 Mueve el teléfono en forma de 8';
-                    sensorInfoDisplay.textContent = '🔄 Calibrando sensor magnético...';
+        // Iniciar seguimiento de posición
+        watchId = navigator.geolocation.watchPosition(
+            // Éxito
+            function(position) {
+                // Obtener el rumbo (heading) de la posición
+                let heading = position.coords.heading;
+                
+                // Si heading es null, significa que el dispositivo no se está moviendo
+                if (heading === null || heading === undefined) {
+                    statusDisplay.textContent = '📱 Mueve el teléfono para obtener rumbo';
+                    sensorInfoDisplay.textContent = '📍 Mueve el teléfono para obtener dirección';
+                    return;
                 }
-            }, 3000);
-        }
+                
+                // Si tenemos heading válido
+                if (!isNaN(heading) && heading >= 0 && heading <= 360) {
+                    sensorActive = true;
+                    currentHeading = heading;
+                    updateCompass(heading);
+                    statusDisplay.textContent = '✅ Brújula lista (Geolocalización)';
+                    sensorInfoDisplay.textContent = `📍 Rumbo: ${Math.round(heading)}° (${getDirection(heading)})`;
+                    console.log('📍 Heading:', heading);
+                }
+            },
+            // Error
+            function(error) {
+                console.error('Error de geolocalización:', error);
+                
+                // Si el error es de permisos, mostrar mensaje claro
+                if (error.code === 1) {
+                    statusDisplay.textContent = '❌ Permiso denegado. Acepta en el navegador.';
+                    sensorInfoDisplay.textContent = '🔐 Acepta los permisos de ubicación';
+                } else if (error.code === 3) {
+                    statusDisplay.textContent = '⏳ Timeout - reintentando...';
+                    sensorInfoDisplay.textContent = '🔄 Reintentando conexión...';
+                } else {
+                    statusDisplay.textContent = '❌ Error: ' + error.message;
+                    sensorInfoDisplay.textContent = '⚠️ ' + error.message;
+                }
+                
+                // Reintentar después de 3 segundos si es error de timeout
+                if (error.code === 3) {
+                    setTimeout(() => {
+                        if (!sensorActive) {
+                            startGeolocation();
+                        }
+                    }, 3000);
+                }
+            },
+            options
+        );
         
         return true;
         
     } catch (error) {
-        console.error('Error en DeviceOrientation:', error);
-        statusDisplay.textContent = '❌ Error en sensores';
+        console.error('Error iniciando geolocalización:', error);
+        statusDisplay.textContent = '❌ Error al iniciar';
+        sensorInfoDisplay.textContent = '⚠️ ' + error.message;
         return false;
     }
 }
 
 // ============================================
-// MANEJAR DEVICE ORIENTATION (FALLBACK)
+// OBTENER DIRECCIÓN CARDINAL
 // ============================================
-function handleDeviceOrientation(event) {
-    let heading = null;
-    
-    // iOS
-    if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
-        heading = event.webkitCompassHeading;
-        sensorType = 'fallback-ios';
-        console.log('🍎 iOS heading:', heading);
-        
-        if (event.webkitCompassAccuracy !== undefined) {
-            const accuracy = event.webkitCompassAccuracy;
-            if (accuracy < 0) {
-                statusDisplay.textContent = '⚠️ Sensor no disponible';
-                return;
-            } else if (accuracy > 20) {
-                statusDisplay.textContent = '🔄 Calibrando...';
-            } else {
-                statusDisplay.textContent = '✅ Brújula lista';
-            }
-        }
-    }
-    // Android
-    else if (event.alpha !== undefined && event.alpha !== null && !isNaN(event.alpha)) {
-        heading = event.alpha;
-        sensorType = 'fallback-android';
-        console.log('📱 Android heading:', heading);
-        statusDisplay.textContent = '✅ Brújula lista';
-    }
-    
-    if (heading !== null) {
-        sensorActive = true;
-        currentHeading = heading;
-        updateCompass(heading);
-        sensorInfoDisplay.textContent = `📱 Usando ${sensorType === 'fallback-ios' ? 'iOS' : 'Android'} DeviceOrientation (fallback)`;
-    }
+function getDirection(degrees) {
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const index = Math.round(((degrees % 360) / 45)) % 8;
+    return directions[index];
 }
 
 // ============================================
@@ -244,7 +120,7 @@ function updateCompass(heading) {
     
     currentHeading = heading;
     
-    // Actualizar la aguja
+    // Actualizar la aguja (la punta roja apunta al Norte)
     needle.style.transform = `translate(-50%, -100%) rotate(${-heading}deg)`;
     
     // Actualizar el display del rumbo
@@ -296,41 +172,45 @@ function calibrateCompass() {
 }
 
 // ============================================
+// DETENER SEGUIMIENTO
+// ============================================
+function stopGeolocation() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+}
+
+// ============================================
 // INICIAR LA BRÚJULA
 // ============================================
 async function init() {
     statusDisplay.textContent = '🔄 Iniciando brújula...';
-    sensorInfoDisplay.textContent = '🔍 Detectando sensores...';
+    sensorInfoDisplay.textContent = '📍 Conectando a GPS...';
     
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /android/i.test(navigator.userAgent);
+    // Intentar con geolocalización
+    const started = startGeolocation();
     
-    console.log(`📱 Dispositivo: ${isIOS ? 'iOS' : isAndroid ? 'Android' : 'Otro'}`);
-    
-    if (isIOS) {
-        // En iOS usar DeviceOrientation directamente
-        sensorInfoDisplay.textContent = '🍎 Detectado iOS - usando DeviceOrientation';
-        startDeviceOrientation();
-    } else {
-        // En Android y otros, probar AbsoluteOrientationSensor primero
-        sensorInfoDisplay.textContent = '🎯 Probando AbsoluteOrientationSensor...';
-        const started = startAbsoluteOrientation();
-        
-        // Si no se inició, el fallback se activa automáticamente
-        if (!started) {
-            sensorInfoDisplay.textContent = '⚠️ Iniciando fallback...';
-        }
+    if (!started) {
+        statusDisplay.textContent = '❌ No se pudo iniciar';
+        sensorInfoDisplay.textContent = '❌ Geolocalización no disponible';
     }
     
-    console.log('🧭 Brújula Web iniciada');
+    console.log('🧭 Brújula Web con Geolocalización iniciada');
+    console.log('📍 La brújula muestra la dirección de movimiento');
 }
 
 // ============================================
 // EVENTOS DE LA INTERFAZ
 // ============================================
 calibrateBtn.addEventListener('click', calibrateCompass);
+
+// Limpiar al cerrar
+window.addEventListener('beforeunload', function() {
+    stopGeolocation();
+});
 
 // ============================================
 // INICIAR TODO
